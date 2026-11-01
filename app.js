@@ -279,7 +279,9 @@
       var cap = typeof s.capacity === "number" ? s.capacity : 35;
       var remNum = typeof s.remaining === "number" ? s.remaining : (s.soldOut ? 0 : cap);
       var row = el("div", "row");
-      var date = el("div", "date", s.date); date.appendChild(el("small", null, s.dow + " · " + s.dowKo + "요일"));
+      var date = el("div", "date");
+      date.appendChild(el("span", "d-num", s.date));
+      date.appendChild(el("small", null, s.dow + " · " + s.dowKo + "요일"));
       var time = el("div", "time", s.time);
       var av = el("div", "avail"), dots = el("div", "dots"); dots.setAttribute("aria-hidden", "true");
       var tk = Math.max(0, cap - remNum);
