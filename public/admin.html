@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <title>BUFFER 예매 관리</title>
+<link rel="preload" href="/fonts/SUIT-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<style>@font-face{font-family:"SM KGothic";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SMKGothic-subset.woff2) format("woff2")}@font-face{font-family:"SM JGothic";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SMJGothic-subset.woff2) format("woff2")}body{word-spacing:-.15em}button,input{word-spacing:inherit}h1,th,button{font-family:"SM KGothic","SUIT Variable",sans-serif}@font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}</style>
 <style>
 :root{--paper:#EEF0F0;--ink:#0A0B0C;--mute:#5B6064;--line:#BFC3C6;--danger:#B3261E;color-scheme:light}
 @media (prefers-color-scheme:dark){:root{--paper:#0A0B0C;--ink:#ECEEEE;--mute:#9AA0A4;--line:#2B2F32;--danger:#FF6F66;color-scheme:dark}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 "IBM Plex Sans KR",system-ui,sans-serif;padding:24px max(16px,env(safe-area-inset-left,0px))}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 "SM JGothic","SUIT Variable",-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;padding:24px max(16px,env(safe-area-inset-left,0px))}
 .wrap{max-width:960px;margin:0 auto}
 h1{font-size:22px;margin:0 0 4px}
 .mute{color:var(--mute);font-size:13px}
@@ -52,7 +54,7 @@ th{font-size:12px;color:var(--mute);font-weight:500}
     if(r.status===401){$("out").hidden=true;$("err").textContent="토큰이 올바르지 않거나 서버에 관리자 토큰이 설정되어 있지 않습니다.";return}
     var d=await r.json(), rows=d.reservations; $("out").hidden=false;
     var cnt={A:0,B:0,C:0,D:0}; rows.forEach(function(x){cnt[x.show]++});
-    $("sum").textContent=""; Object.keys(NAMES).forEach(function(k){var s=document.createElement("span");s.textContent=NAMES[k]+" : "+cnt[k]+" / 35";$("sum").appendChild(s)});
+    $("sum").textContent=""; Object.keys(NAMES).forEach(function(k){var s=document.createElement("span");s.textContent=NAMES[k]+" : "+cnt[k]+" / "+((d.seats&&d.seats[k])||35);$("sum").appendChild(s)});
     var tb=$("rows"); tb.textContent="";
     rows.forEach(function(x){
       var tr=document.createElement("tr");

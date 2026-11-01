@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>BUFFER 버퍼 티켓 예매</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="preload" href="/fonts/SUIT-Variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/SMJGothic-subset.woff2" as="font" type="font/woff2" crossorigin>
+<style>@font-face{font-family:"SM KGothic";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SMKGothic-subset.woff2) format("woff2")}@font-face{font-family:"SM JGothic";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SMJGothic-subset.woff2) format("woff2")}@font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}</style>
 <style>
 /* Layout: 한 장의 도면처럼 가로 구역선으로 나뉜 페이지. 히어로에는 템포를 형상화한 9개의 선과 그 위를 오가는 점. */
 :root{
@@ -16,9 +16,10 @@
   --line:#BFC3C6;
   --ring:#7E8387;
   --danger:#B3261E;
-  --f-display:"Archivo","IBM Plex Sans KR",sans-serif;
-  --f-body:"IBM Plex Sans KR",system-ui,sans-serif;
-  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+  /* 한글·영문·숫자 모두 SM 글꼴. 기본(본문)은 SM 중고딕(--f-body, --f-mono), 강조는 SM 견출고딕(--f-display). 두 글꼴에 없는 기호(−, ✕)만 SUIT */
+  --f-display:"SM KGothic","SUIT Variable",-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-body:"SM JGothic","SUIT Variable",-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"SM JGothic","SUIT Variable",-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
@@ -30,58 +31,107 @@
 }
 *{box-sizing:border-box}
 body{
-  background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;
+  background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;letter-spacing:-.01em;
   padding-block:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
 }
 .wrap{max-width:1040px;margin:0 auto}
 .zone{border-top:1px solid var(--ink);padding-block:28px}
 .zone:first-of-type{border-top:0}
-.label{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mute)}
+.label{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--mute)}
 h1,h2{margin:0;font-weight:inherit}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--ink);outline-offset:3px}
 
 /* top bar */
-.bar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:10px;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);margin-inline:calc(50% - 50vw);padding-inline:calc(50vw - 50%);font-family:var(--f-mono);font-size:12px;letter-spacing:.08em}
+.bar{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:10px;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);margin-inline:calc(50% - 50vw);padding-inline:calc(50vw - 50%);font-family:var(--f-mono);font-size:12px;letter-spacing:.03em}
 .bar>a{color:inherit;text-decoration:none}
-.bar .wm{font-family:var(--f-display);font-weight:800;font-size:15px;letter-spacing:.02em}
+.bar .wm{font-family:var(--f-display);font-weight:800;font-size:15px;letter-spacing:0}
 .bar nav{display:flex;gap:20px;align-items:center}
 .bar nav a{color:inherit;text-decoration:none}
 .bar nav a:hover{text-decoration:underline;text-underline-offset:4px}
 .bar .cta{border:1px solid var(--ink);padding:6px 14px;background:var(--ink);color:var(--paper)}
 @media (max-width:700px){.bar nav a:not(.cta){display:none}}
 
-/* hero */
-.hero{padding-top:36px;padding-bottom:12px}
+/* crop: 로고 PNG의 여백을 잘라 보여주는 틀 */
 .crop{display:block;position:relative;overflow:hidden;width:100%;aspect-ratio:var(--ar)}
 .crop img{position:absolute;width:var(--w);max-width:none;height:auto;left:var(--l);top:var(--t)}
-.crop.logo{max-width:860px;margin-inline:auto}.crop.base{max-width:420px}.crop.sfu{max-width:360px}
-.sub{display:flex;flex-wrap:wrap;gap:6px 28px;margin-top:22px;font-family:var(--f-mono);font-size:13px}
-.hero .go{margin-top:24px;display:inline-block;text-decoration:none}
-.tempo{position:relative;height:160px;margin-top:8px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-end;padding-inline:2px}
-.ln{position:relative;width:1px;background:var(--ink);height:var(--h)}
-.ln i{position:absolute;left:-3px;top:0;width:7px;height:7px;border-radius:50%;background:var(--ink);animation:beat var(--t) cubic-bezier(.6,0,.4,1) infinite alternate}
-@keyframes beat{from{transform:translateY(0)}to{transform:translateY(calc(var(--h-px) - 7px))}}
-.ln:nth-child(odd) i{background:var(--paper);box-shadow:inset 0 0 0 1.5px var(--ink)}
-@media (prefers-reduced-motion:reduce){.ln i{animation:none;transform:translateY(calc(var(--h-px)*.5))}.marq span{animation:none!important}}
+.crop.base{max-width:420px}.crop.sfu{max-width:220px;margin-inline:auto}
+
+/* hero: 포스터처럼 화면을 가로지르는 가운데 기둥(세로선 2개)과 띠(가로 점선), 점 격자, 네 귀퉁이 정보 */
+.hero{
+  --colW:180px;--imgH:150px;
+  --rule:color-mix(in srgb,var(--ink) 40%,transparent);
+  position:relative;margin-inline:calc(50% - 50vw);height:max(600px,calc(100svh - 118px));overflow:hidden;
+}
+.x-ttl{position:absolute;inset:14px max(16px,env(safe-area-inset-left,0px)) auto;display:flex;justify-content:space-between;align-items:flex-start;margin:0;z-index:2;pointer-events:none}
+.x-ttl b{font-family:var(--f-display);font-weight:900;font-size:min(calc((100vw - var(--colW) - 96px) / 8.4),170px);line-height:.8;letter-spacing:-.045em}
+.x-col{position:absolute;top:0;bottom:0;left:calc(50% - var(--colW) / 2);width:var(--colW);border-inline:1px solid var(--rule);z-index:1}
+.x-txt{position:absolute;left:0;right:0;margin:0;padding-inline:1px;font-family:var(--f-display);font-weight:800;font-size:9.5px;line-height:1.18;letter-spacing:0;text-transform:uppercase;text-align:justify;text-align-last:justify;word-spacing:.2em}
+.x-txt.a{bottom:calc(50% + var(--imgH) / 2 + 22px)}
+.x-txt.b{top:calc(50% + var(--imgH) / 2 + 12px)}
+.x-txt.a2{bottom:calc(50% + var(--imgH) / 2 + 66px)}
+.x-img{position:absolute;left:0;right:0;top:calc(50% - var(--imgH) / 2);height:var(--imgH);margin:0;background:var(--ink);overflow:hidden;z-index:2}
+.x-img{display:flex;align-items:center;padding-inline:10%}
+.x-go{position:absolute;left:-1px;right:-1px;top:calc(50% + var(--imgH) / 2 + 74px);height:38px;display:flex;align-items:center;justify-content:center;background:var(--ink);color:var(--paper);text-decoration:none;font-family:var(--f-mono);font-size:12.5px;letter-spacing:.03em;z-index:2}
+.x-go:hover{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.x-spine{position:absolute;left:50%;width:1px;background:var(--rule);top:calc(50% - var(--imgH) * 1.55);bottom:calc(50% - var(--imgH) * 1.55)}
+/* 가로 띠: 위아래 두 줄씩 점선 */
+.x-band{position:absolute;left:0;right:0;top:calc(50% - var(--imgH) / 2);height:var(--imgH);pointer-events:none}
+.x-band::before,.x-band::after{content:"";position:absolute;left:0;right:0;height:5px;border-block:1px dashed var(--rule)}
+.x-band::before{top:-5px}.x-band::after{bottom:-5px}
+.x-lab{position:absolute;top:50%;transform:translateY(-50%);font-family:var(--f-mono);font-size:12px;letter-spacing:.015em;color:var(--ink);text-decoration:none;white-space:nowrap;z-index:2}
+.x-lab:hover{text-decoration:underline;text-underline-offset:3px}
+.x-lab.l1{left:max(16px,env(safe-area-inset-left,0px))}
+.x-lab.l2{right:calc(50% + var(--colW) * 1.25)}
+.x-lab.l3{left:calc(50% + var(--colW) * 1.25)}
+.x-lab.l4{right:max(16px,env(safe-area-inset-right,0px))}
+.x-dots i{position:absolute;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:var(--ink);left:calc(50% + var(--cx) * var(--colW));top:calc(50% + var(--cy) * var(--imgH));animation:blip 3.6s var(--dl) infinite}
+@keyframes blip{0%,86%,100%{transform:scale(1)}92%{transform:scale(2.4)}}
+/* 기둥 세로선을 따라 흐르는 작은 블록 (app.js가 만듦) */
+.x-flow{position:absolute;top:0;bottom:0;width:5px;overflow:hidden;pointer-events:none}
+.x-flow.l{left:-3px}.x-flow.r{right:-3px}.x-flow.s{left:-2px}
+.x-flow b{position:absolute;inset:0;animation:flow var(--d) linear var(--dl) infinite}
+.x-flow b::after{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--h);background:var(--ink)}
+@keyframes flow{from{transform:translateY(-100%)}to{transform:translateY(100%)}}
+
+/* 좁은 화면: 회차 표시를 띠 안에서 좌우 두 줄로 */
+@media (max-width:1000px){
+  .x-lab{transform:none}
+  .x-lab.l1,.x-lab.l3{top:calc(50% - var(--imgH) / 2 + 14px)}
+  .x-lab.l2,.x-lab.l4{top:calc(50% + var(--imgH) / 2 - 30px)}
+  .x-lab.l2{right:auto;left:max(16px,env(safe-area-inset-left,0px))}
+  .x-lab.l3{left:auto;right:max(16px,env(safe-area-inset-right,0px))}
+}
+@media (prefers-reduced-motion:reduce){.x-dots i{animation:none}.x-flow{display:none}.marq span{animation:none!important}}
+/* 로고 질감: 거친 인쇄 질감 + 점 세로줄 + 점선 가로줄 (기둥 레이아웃 위에 더 촘촘히) */
+.hero{--faint:color-mix(in srgb,var(--ink) 26%,transparent)}
+.hero::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.26;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* 복사기 얼룩처럼 큰 결 한 겹 더 */
+.hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.08;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .06' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .7 -.18'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E")}
+@media (prefers-color-scheme:dark){.hero::before,.hero::after{mix-blend-mode:screen;filter:invert(1)}.hero::before{opacity:.14}.hero::after{opacity:.05}}
+.h-vl{position:absolute;width:2px;top:var(--t,0);bottom:var(--b,0);left:var(--x);pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(to bottom,var(--faint) 0 2px,transparent 2px var(--g,7px))}
+.h-hl{position:absolute;left:var(--l,0);right:var(--r,0);top:var(--y);height:0;border-top:1px dashed var(--faint);pointer-events:none;z-index:0}
 
 /* marquee */
 .marq{overflow:hidden;border-block:1px solid var(--ink);margin-inline:calc(50% - 50vw);white-space:nowrap;background:var(--ink);color:var(--paper)}
-.marq div{display:inline-block;padding-block:10px;font-family:var(--f-display);font-weight:800;font-size:clamp(16px,3vw,26px);letter-spacing:.02em;animation:marq 28s linear infinite}
+.marq div{display:inline-block;padding-block:10px;font-family:var(--f-display);font-weight:800;font-size:clamp(16px,3vw,26px);letter-spacing:0;animation:marq 28s linear infinite}
 @keyframes marq{to{transform:translateX(-50%)}}
 
 /* status */
 .status{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:10px 24px}
-.status .big{font-family:var(--f-mono);font-size:clamp(26px,6vw,44px);font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.pill{display:inline-block;border:1px solid var(--ink);padding:2px 10px;font-family:var(--f-mono);font-size:12px;letter-spacing:.08em}
+.status .big{font-family:var(--f-mono);line-height:1.1;font-size:clamp(26px,6vw,44px);font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;border:1px solid var(--ink);padding:2px 10px;font-family:var(--f-mono);font-size:12px;letter-spacing:.03em}
 .pill.on{background:var(--ink);color:var(--paper)}
 .banner{margin-top:14px;border:1px solid var(--line);padding:10px 14px;font-size:13.5px;color:var(--mute)}
 
 /* shows */
 .shows{display:flex;flex-direction:column;margin-top:18px;border-top:1px solid var(--line)}
-.row{display:grid;grid-template-columns:8.5rem 6rem 1fr auto;align-items:center;gap:14px 24px;padding-block:20px;border-bottom:1px solid var(--line)}
+.row{display:grid;grid-template-columns:8.5rem 1fr auto;align-items:center;gap:14px 24px;padding-block:20px;border-bottom:1px solid var(--line)}
 .date{font-family:var(--f-display);font-weight:800;font-size:34px;line-height:1;letter-spacing:-.03em}
-.date small{display:block;margin-top:6px;font-family:var(--f-mono);font-weight:400;font-size:11px;letter-spacing:.14em;color:var(--mute)}
+.date small{display:block;margin-top:6px;font-family:var(--f-mono);font-weight:400;font-size:11px;letter-spacing:.05em;color:var(--mute)}
 .time{font-family:var(--f-mono);font-size:20px;font-weight:500}
 .avail{display:flex;align-items:center;gap:18px;min-width:0}
 .dots{display:grid;grid-template-columns:repeat(7,9px);gap:6px}
@@ -89,28 +139,28 @@ button{font:inherit;color:inherit;cursor:pointer}
 .dots span.t{background:var(--ink);box-shadow:none}
 .rem{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums;line-height:1.5}
 .rem b{display:block;font-size:26px;font-weight:500;letter-spacing:-.02em}
-.btn{border:1px solid var(--ink);background:transparent;padding:12px 22px;font-family:var(--f-mono);font-size:13px;letter-spacing:.06em;min-width:9.5rem}
+.btn{border:1px solid var(--ink);background:transparent;padding:12px 22px;font-family:var(--f-mono);font-size:13px;letter-spacing:.02em;min-width:9.5rem}
 .btn:hover:not(:disabled){background:var(--ink);color:var(--paper)}
 .btn.solid{background:var(--ink);color:var(--paper)}
 .btn.solid:hover:not(:disabled){background:transparent;color:var(--ink)}
 .btn:disabled{border-color:var(--line);color:var(--mute);cursor:not-allowed}
 @media (max-width:720px){
-  .row{grid-template-columns:1fr auto;grid-template-areas:"d t" "a a" "b b"}
-  .row .date{grid-area:d}.row .time{grid-area:t;text-align:right}.row .avail{grid-area:a}.row .btn{grid-area:b;width:100%}
+  .row{grid-template-columns:1fr auto;grid-template-areas:"d t" "b b"}
+  .row .date{grid-area:d}.row .time{grid-area:t;text-align:right}.row .btn{grid-area:b;width:100%}
 }
 
 /* info */
 .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:18px;border-top:1px solid var(--line)}
 .fact{padding:16px 16px 16px 0;border-bottom:1px solid var(--line)}
-.fact dt{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;color:var(--mute)}
-.fact dd{margin:6px 0 0;font-size:18px;font-weight:500}
+.fact dt{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;color:var(--mute)}
+.fact dd{margin:6px 0 0;font-size:18px;font-weight:500;line-height:1.45}
 .notice{margin-top:22px;max-width:62ch;color:var(--mute);font-size:14px}
 .notice strong{color:var(--ink);font-weight:600}
 
 /* my ticket */
 .stub{margin-top:18px;border:1px solid var(--ink);display:grid;grid-template-columns:1fr auto}
 .stub>div{padding:20px}
-.stub .code{font-family:var(--f-mono);font-size:30px;font-weight:500;letter-spacing:-.02em}
+.stub .code{font-family:var(--f-mono);line-height:1.15;font-size:30px;font-weight:500;letter-spacing:-.02em}
 .stub .meta{display:grid;gap:2px;margin-top:10px;font-size:14px}
 .stub .side{border-left:1px dashed var(--ink);display:flex;flex-direction:column;justify-content:center;gap:8px;min-width:12rem}
 @media (max-width:640px){.stub{grid-template-columns:1fr}.stub .side{border-left:0;border-top:1px dashed var(--ink)}}
@@ -123,49 +173,72 @@ button{font:inherit;color:inherit;cursor:pointer}
 .dlg h2{font-family:var(--f-display);font-weight:800;font-size:26px;letter-spacing:-.02em;line-height:1.15}
 .dlg .which{font-family:var(--f-mono);font-size:13px;color:var(--mute);margin-top:6px}
 .dlg p{margin:16px 0 0}
+.dlg h3{margin:20px 0 0;font-size:14px;font-weight:600}.dlg h3+p{margin-top:6px}
 .dlg .actions{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}
 .dlg .actions .btn{flex:1}
 .field{display:block;margin-top:16px}
-.field span{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;color:var(--mute);margin-bottom:6px}
+.field span{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;color:var(--mute);margin-bottom:6px}
 .field input{width:100%;font:inherit;font-size:16px;color:var(--ink);background:transparent;border:0;border-bottom:1px solid var(--ink);padding:8px 0;border-radius:0}
 .field input[readonly]{color:var(--mute)}
 .err{color:var(--danger);font-size:13.5px;margin-top:12px;min-height:1.2em}
-.big-code{font-family:var(--f-mono);font-size:34px;font-weight:500;margin-top:14px;letter-spacing:-.02em}
-footer{padding-block:28px 40px;border-top:1px solid var(--ink);font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;color:var(--mute);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.big-code{font-family:var(--f-mono);line-height:1.15;font-size:34px;font-weight:500;margin-top:14px;letter-spacing:-.02em}
+footer{padding-block:28px 40px;border-top:1px solid var(--ink);font-family:var(--f-mono);font-size:11px;letter-spacing:.035em;color:var(--mute);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 
 /* gallery */
 figure{margin:0}
 .zoom{display:block;width:100%;padding:0;border:0;background:var(--line);cursor:zoom-in;line-height:0}
 .zoom img{display:block;width:100%;height:auto}
-.cap{margin-top:8px;font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;color:var(--mute)}
-.intro{display:grid;grid-template-columns:1fr 1fr 1fr;align-items:end;gap:12px 48px;margin-top:22px}
-.intro p{margin:0;max-width:60ch;color:var(--mute);font-size:14px}
-.intro p b{color:var(--ink);font-weight:600}
-@media (max-width:700px){.intro{grid-template-columns:1fr}}
-.film{margin-top:18px;display:grid;grid-template-columns:2fr 1fr;gap:16px}
-.film video{display:block;width:100%;height:auto;aspect-ratio:1080/566;background:#f7f7f7;border:1px solid var(--line)}
+.cap{margin-top:8px;font-family:var(--f-mono);font-size:11px;letter-spacing:.035em;color:var(--mute)}
+/* 공연 소개: 로고 가운데 → 영상·티저 나란히 → 각 영상 아래 소개 글 */
+.po-logo{margin-top:22px;display:flex;justify-content:center}
+.po-logo .crop.base{max-width:260px}
+.film{margin-top:18px;display:grid;grid-template-columns:2fr 1fr;gap:16px 16px}
+.po-cap{justify-self:center;margin:4px 0 0;max-width:min(100%,46ch);color:var(--mute);font-size:14px;line-height:1.6;text-align:center}
+.po-cap .nw{white-space:nowrap}
+.po-cap b{color:var(--ink);font-weight:600}
+@media (max-width:700px){.film .film-link{order:1}.po-cap.c1{order:2}.teaser{order:3}.po-cap.c2{order:4}.po-cap{justify-self:center;margin-bottom:8px}}
+/* 영상: 테두리 안쪽 칸을 빈틈없이 채움(object-fit:cover), 배경색이 비치지 않게 투명 */
+.film video{display:block;width:100%;height:auto;aspect-ratio:1080/566;object-fit:cover;background:transparent;border:1px solid var(--line)}
 .teaser{aspect-ratio:auto;min-height:140px;border:1px dashed var(--ring);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:var(--f-mono);text-align:center}
-.teaser b{font-weight:500;letter-spacing:.1em;font-size:14px}
+.teaser b{font-weight:500;letter-spacing:.035em;font-size:14px}
 @media (max-width:700px){.film{grid-template-columns:1fr}}
-.profiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
-.profiles .zoom img{aspect-ratio:4/5;object-fit:cover}
-@media (max-width:520px){.profiles{grid-template-columns:repeat(2,1fr);gap:8px}}
+/* 퍼포머 슬라이드: 가운데 큰 사진, 양옆 사진이 걸쳐 보이고, 오른쪽 반투명 패널이 뒤 사진을 흐리게 비춤 (app.js) */
+.pf{position:relative;margin-top:18px}
+.pf-stage{position:relative;overflow:hidden;touch-action:pan-y}
+.pf-item{position:absolute;left:0;padding:0;border:0;background:var(--line);line-height:0;cursor:pointer;transition:transform .6s cubic-bezier(.6,0,.2,1),opacity .45s}
+.pf-item img{display:block;width:100%;height:100%;object-fit:cover}
+.pf-item.on{cursor:zoom-in}
+.pf-nav{position:absolute;top:0;z-index:8;width:44px;height:44px;margin-top:-22px;border:0;background:none;font-family:var(--f-mono);font-size:26px;line-height:1;color:var(--ink)}
+.pf-nav:hover{background:var(--ink);color:var(--paper)}
+.pf-panel{position:absolute;right:0;top:50%;transform:translateY(-50%);width:min(44%,440px);z-index:9;border:1px solid var(--ink);background:color-mix(in srgb,var(--paper) 58%,transparent);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);font-size:13px;line-height:1.45}
+.pf-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--ink)}
+.pf-row:first-child{border-top:0}
+.pf-row>*{padding:10px 12px;min-width:0}
+.pf-row>*+*{border-left:1px solid var(--ink)}
+.pf-row.one{grid-template-columns:1fr}
+.pf-k{font-family:var(--f-mono);font-size:11px;letter-spacing:.045em;color:var(--mute)}
+.pf-n{text-align:right;font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums}
+.pf-title{font-size:22px;font-weight:500;letter-spacing:-.02em;line-height:1.2}
+.pf-btn{border:0;background:color-mix(in srgb,var(--ink) 14%,transparent);font-family:var(--f-mono);font-size:12px;letter-spacing:.03em;text-align:center}
+.pf-btn:hover{background:var(--ink);color:var(--paper)}
+/* 퍼포머 − 01 + : 왼쪽 "공연" 날짜와 같은 글꼴·크기·높이로 맞춰 한 줄에 나란히 */
+.pf-step{display:flex;align-items:center;gap:12px;margin-top:0;font-variant-numeric:tabular-nums;line-height:inherit}
+.pf-step button{border:0;background:none;padding:0;font:inherit;line-height:inherit;min-width:1em}
+.pf-desc p{margin:0}.pf-desc p+p{margin-top:8px}
+@media (max-width:700px){
+  .pf-panel{position:static;transform:none;width:auto;margin-top:12px;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+@media (prefers-reduced-motion:reduce){.pf-item{transition:none}}
 .group{margin-top:12px}
 .group .zoom img{aspect-ratio:14408/7707}
 .credits{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:18px;border-top:1px solid var(--line)}
 .credits div{padding:12px 16px 12px 0;border-bottom:1px solid var(--line)}
-.credits dt{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;color:var(--mute)}
-.credits dd{margin:4px 0 0;font-size:15px}
+.credits dt{font-family:var(--f-mono);font-size:11px;letter-spacing:.05em;color:var(--mute)}
+.credits dd{margin:4px 0 0;font-size:15px;line-height:1.45}
 .credits .wide{grid-column:1/-1}
 .paybox{margin-top:16px;border:1px solid var(--line);padding:14px 16px;font-size:14px;display:grid;gap:4px}
 .paybox b{font-family:var(--f-mono);font-size:22px;font-weight:500}
 
-/* falling boxes: 검은 정사각형들이 화면 전체로 떨어짐(app.js). difference 블렌드라 겹친 글자는 반전되어 읽힘 */
-#fall{position:fixed;inset:0;z-index:5;pointer-events:none;overflow:hidden;mix-blend-mode:difference}
-#fall i{position:absolute;top:0;left:var(--x);width:var(--s);height:var(--s);background:#fff;will-change:transform;animation:drop var(--d) linear var(--dl) infinite}
-@keyframes drop{from{transform:translate3d(0,-40vh,0) rotate(var(--r0))}to{transform:translate3d(var(--dx),115vh,0) rotate(var(--r1))}}
-#fall.off{visibility:hidden}#fall.off i{animation-play-state:paused}
-@media (prefers-reduced-motion:reduce){#fall i{animation-play-state:paused}}
 
 /* lightbox */
 .lb{position:fixed;inset:0;z-index:30;background:color-mix(in srgb,var(--paper) 94%,transparent);display:flex;align-items:center;justify-content:center;padding:16px}
@@ -173,6 +246,180 @@ figure{margin:0}
 .lb button{position:absolute;border:1px solid var(--ink);background:var(--paper);width:44px;height:44px;font-size:18px}
 .lb .x{top:max(12px,env(safe-area-inset-top,0px));right:12px}.lb .pv{left:12px;top:50%}.lb .nx{right:12px;top:50%}
 .lb .n{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-family:var(--f-mono);font-size:12px;color:var(--mute)}
+
+/* ================= 정리된 톤 (레퍼런스: 미색 종이 · 좁은 대문자 · 라벨 열 + 내용 열 · 넓은 여백) ================= */
+:root{--paper:#F2F1EC;--ink:#111110;--mute:#7A7871;--line:#D9D7D0;--ring:#A3A199;
+  --lab:clamp(150px,27%,290px)}
+body{font-size:14.5px}
+/* 작은 라벨·버튼·숫자: 좁은 대문자 */
+.label,.bar,.pill,.date,.date small,.time,.btn,.fact dt,.field span,.dlg .which,footer,.cap,.teaser,.pf-k,.pf-n,.pf-btn,.pf-title,
+.credits dt,.x-lab,.x-go,.status .big,.stub .code,.big-code,.marq div,.err{text-transform:uppercase}
+.label{font-size:11.5px;font-weight:600;letter-spacing:.02em;color:var(--ink)}
+/* 섹션: 왼쪽 라벨 열 + 오른쪽 내용 열, 굵은 구분선 대신 여백 */
+.zone{display:grid;grid-template-columns:var(--lab) minmax(0,1fr);column-gap:24px;border-top:0;padding-block:60px}
+.zone>*{grid-column:2;min-width:0}
+.zone>.label{grid-column:1;grid-row:1/span 9;align-self:start;padding-top:2px}
+.zone>.label+*{margin-top:0}
+.zone.wide>*,.zone.wide>.label{grid-column:1/-1;grid-row:auto}
+.zone.wide>.label{margin-bottom:6px}
+@media (max-width:700px){.zone{grid-template-columns:1fr;padding-block:44px}.zone>*,.zone>.label{grid-column:1;grid-row:auto}.zone>.label{margin-bottom:14px}}
+/* 상단 바 */
+.bar{font-size:12px;letter-spacing:.02em;font-weight:500;border-bottom:1px solid var(--line)}
+.bar .wm{font-family:var(--f-mono);font-weight:700;font-size:13px;letter-spacing:.01em;text-transform:uppercase}
+.bar .cta{padding:5px 11px;font-weight:600}
+/* 띠: 검은 띠 대신 얇은 선 사이 작은 대문자 */
+.marq{background:transparent;color:var(--ink);border-block:1px solid var(--line)}
+.marq div{font-family:var(--f-mono);font-weight:600;font-size:12px;letter-spacing:.04em;padding-block:9px;animation-duration:44s}
+/* 예매 상태 */
+.status .big{font-family:var(--f-mono);font-weight:500;font-size:clamp(30px,5vw,44px);letter-spacing:0}
+.pill{font-weight:600;letter-spacing:.03em;border-color:var(--ink)}
+/* 회차 */
+.shows{margin-top:0;border-top:1px solid var(--line)}
+.row{grid-template-columns:9rem 1fr auto;padding-block:16px}
+.date{font-family:var(--f-mono);font-weight:600;font-size:24px;letter-spacing:0;line-height:1.05}
+.date small{display:inline;margin:0 0 0 8px;font-size:11.5px;letter-spacing:.02em;font-weight:500}
+.time{font-family:var(--f-mono);font-size:18px;font-weight:500}
+.btn{font-weight:600;font-size:12px;letter-spacing:.03em;padding:10px 18px;min-width:8.5rem}
+/* 예매 안내 · 크레딧: 줄 없는 목록 (항목 이름 | 내용) */
+.facts,.credits{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:32px;margin-top:0;border-top:0}
+.fact,.credits div{display:grid;grid-template-columns:8.5em minmax(0,1fr);gap:12px;padding:4px 0;border-bottom:0}
+.fact dt,.credits dt{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.02em;font-weight:500;color:var(--mute);padding-top:2px}
+.fact dd,.credits dd{margin:0;font-size:14px;font-weight:400;line-height:1.5}
+.credits .wide{grid-column:1/-1}
+@media (max-width:700px){.facts,.credits{grid-template-columns:1fr}}
+/* 공연 소개 · 퍼포머 */
+.po-logo{margin-top:8px}
+.teaser{border:1px solid var(--line)}
+.teaser b{letter-spacing:.03em;font-weight:600;font-family:var(--f-mono)}
+.film video{border:1px solid var(--line)}
+.pf-panel{border-color:var(--ink)}
+.pf-title{font-family:var(--f-mono);font-weight:600;font-size:22px;letter-spacing:0}
+.pf-k,.pf-n,.pf-btn{font-weight:600;letter-spacing:.03em}
+/* 예매 창 */
+.dlg{border:1px solid var(--ink);padding:28px}
+.dlg h2{font-weight:700;font-size:22px;letter-spacing:-.01em}
+.dlg .which{font-family:var(--f-mono);font-weight:600;letter-spacing:.03em;color:var(--mute)}
+.dlg h3{font-size:13px}
+.field span{font-family:var(--f-mono);font-weight:600;letter-spacing:.03em}
+.field input{border-bottom-color:var(--line)}
+.field input:focus{border-bottom-color:var(--ink);outline:0}
+/* 내 예매 */
+.stub{border-color:var(--ink)}
+.stub .code{font-family:var(--f-mono);font-weight:600;letter-spacing:0}
+.big-code{font-family:var(--f-mono);font-weight:600;letter-spacing:0}
+/* 푸터 */
+footer{border-top:1px solid var(--line);font-family:var(--f-mono);font-weight:600;font-size:11.5px;letter-spacing:.03em;color:var(--ink)}
+/* 첫 화면: 구조 그대로, 글씨만 같은 계열로 */
+.x-lab{font-family:var(--f-mono);font-weight:600;font-size:12.5px;letter-spacing:.02em}
+.x-go{font-family:var(--f-mono);font-weight:600;letter-spacing:.04em}
+/* 가독성·정렬 보정: 너무 작던 글자 키우고, 커진 글자에 맞춰 간격 조정 */
+.label{font-size:13px}
+.bar{font-size:13px}.bar .wm{font-size:14px}
+.marq div{font-size:13px}
+.pill{font-size:12.5px}
+.date small{font-size:12.5px}
+.btn{font-size:13px}
+.field span{font-size:12.5px}
+.fact dt,.credits dt{font-size:13px;padding-top:1px}
+.fact,.credits div{grid-template-columns:9.5em minmax(0,1fr)}
+.fact dd,.credits dd{font-size:14.5px}
+.pf-k{font-size:12px}.pf-n,.pf-btn{font-size:12.5px}
+footer{font-size:12.5px}
+.cap{font-size:12px}
+/* 첫 화면 기둥 안 작은 글: 9.5px → 11px, 늘어난 줄 수만큼 위아래 간격 확보 */
+.x-txt{font-size:11px;line-height:1.25;text-align:left;text-align-last:auto;word-spacing:normal}
+.x-txt.a2{bottom:calc(50% + var(--imgH) / 2 + 92px)}
+.x-go{top:calc(50% + var(--imgH) / 2 + 84px)}
+@media (max-width:700px){.x-txt{font-size:10.5px}.x-go{top:calc(50% + var(--imgH) / 2 + 96px)}}
+/* 회차 줄: 날짜 · 요일 · 시간을 세로 가운데로 맞춤 */
+.date{display:flex;align-items:center;gap:8px}
+.date small{margin:0;line-height:1}
+.row .time{line-height:1;display:flex;align-items:center}
+/* 본문 안에서 굵게 강조된 한글·제목도 태고딕 */
+b,strong,h1,h2,h3,.dlg h2,.dlg h3,.po-cap b,.notice strong{font-family:var(--f-display)}
+/* SM 글꼴 보정: 공백이 0.4em으로 넓어서 약 0.25em 수준으로 좁힘, 요일은 한 줄 */
+body{word-spacing:-.15em}
+button,input{word-spacing:inherit}
+.x-ttl b{word-spacing:0}
+.row{grid-template-columns:13rem 1fr auto}
+.date{white-space:nowrap}
+.date small{white-space:nowrap}
+@media (max-width:720px){.row{grid-template-columns:1fr auto}}
+/* 가운데 창 로고: "BUFFER 버퍼" 글자의 중심(로고 이미지 안 54.1%, 44.7% 지점)을 창 중심 = 기둥 축에 맞추고,
+   글자 폭이 창의 약 82%가 되도록 키움. 바깥 점들은 창 밖으로 잘림 */
+.x-img .x-logo{position:absolute;left:50%;top:50%;width:105.3%;max-width:none;height:auto;transform:translate(-54.14%,-44.65%)}
+/* 한글은 단어 중간에서 줄이 바뀌지 않게 */
+body{word-break:keep-all;overflow-wrap:anywhere}
+/* 굵기 정리: 기본은 Regular, 아래만 ExtraBold */
+body *{font-family:var(--f-mono)}
+.bar .wm,.bar .cta,.x-ttl b,.x-go,.zone>.label,.date,.pf-title,.po-cap b,.dlg h2,.dlg h3,h1,h2,h3{font-family:var(--f-display)}
+.date small,.x-col .x-txt{font-family:var(--f-mono)}
+/* 기둥 안 글: 단어 간격을 사이트 나머지와 같게 좁히고, "총 4회차. 예매 오픈 …" 줄은 PC에서 한 줄로.
+   모바일(기둥 폭 116px)에선 의미 단위(총 4회차 / 예매 오픈 / 날짜)로만 줄바꿈 */
+.x-col .x-txt{font-size:10.5px;word-spacing:-.1em;letter-spacing:-.02em}
+.x-txt.b{letter-spacing:-.035em}
+/* 기둥 양쪽 선에 딱 맞게: 줄마다 양끝 정렬(마지막 줄 포함). PC는 한 줄, 모바일은 "총 4회차. 예매 오픈 / 11.04 (수) 20:00." 두 줄 */
+.x-txt.b{white-space:nowrap;text-align:justify;text-align-last:justify;padding-inline:0}
+.x-txt.b .fit{white-space:nowrap}
+
+/* 큰 제목: 견출고딕 숫자·물결표가 넓어서 글자 사이를 좁힘. 크기는 app.js가 기둥에 닿지 않게 맞춤 */
+.x-ttl b{letter-spacing:-.04em;white-space:nowrap}
+.x-ttl .dash{margin-inline:-.1em}
+/* ===== 첫 화면 묶음: 컴퓨터에선 첫 화면 전체 그대로 ===== */
+.x-stage{position:absolute;inset:0}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+
+/* 공연 소개 영상: 누르면 Team Sfumato 인스타그램(새 창). 올리면 살짝 어두워지고 안내 표시 */
+.film-link{position:relative;display:block;color:var(--ink);text-decoration:none;cursor:pointer}
+.film-link video{pointer-events:none;transition:opacity .25s}
+.film-link::after{content:"INSTAGRAM ↗";position:absolute;right:10px;bottom:10px;padding:5px 9px;font-family:var(--f-mono);font-size:12px;background:var(--paper);color:var(--ink);border:1px solid var(--ink);opacity:0;transition:opacity .25s}
+.film-link:hover video,.film-link:focus-visible video{opacity:.82}
+.film-link:hover::after,.film-link:focus-visible::after{opacity:1}
+@media (hover:none){.film-link::after{opacity:1}}
+/* ===== 모바일: 회차 목록 · 크레딧 ===== */
+@media (max-width:720px){
+  /* 회차: 날짜(위)·요일(아래) | 시간 | 버튼 한 줄 */
+  .row{grid-template-columns:auto 1fr auto!important;grid-template-areas:"d t b"!important;gap:0 16px;padding-block:14px}
+  .row .date{grid-area:d;flex-direction:column;align-items:flex-start;gap:5px;font-size:22px}
+  .row .date small{font-size:11.5px}
+  .row .time{grid-area:t;justify-content:flex-start;text-align:left!important;font-size:17px}
+  .row .btn{grid-area:b;width:auto!important;min-width:0;padding:9px 12px;font-size:12px;white-space:nowrap}
+  /* 크레딧: 역할명 칸을 좁혀 이름 줄이 원하는 대로 끊기게 */
+  .fact,.credits div{grid-template-columns:6.8em minmax(0,1fr);gap:10px}
+  .fact dt,.credits dt{font-size:12px}
+  .fact dd,.credits dd{font-size:14px}
+}
+@media (max-width:340px){.row .date{font-size:19px}.row .time{font-size:15px}.row .btn{padding:8px 9px;font-size:11px}}
+/* ===== 모바일 첫 화면 (아이폰 미니 375px 기준) ===== */
+@media (max-width:700px){
+  .hero{--colW:clamp(150px,calc(100vw - 190px),200px);--imgH:118px;--tt:calc(24px + 30vw);height:max(560px,calc(100svh - 92px))}
+  /* 제목: 위쪽에 두 줄(BUFFER / 11.14–15), 아래 무대와 겹치지 않음 */
+  .x-ttl{inset:12px max(14px,env(safe-area-inset-left,0px)) auto;flex-direction:column;align-items:stretch;gap:0}
+  .x-ttl b{font-size:15vw;line-height:.95}
+  .x-ttl b+b{text-align:right}
+  .x-stage{top:var(--tt)}
+  .x-band::before{top:-4px}.x-band::after{bottom:-4px}
+  /* 기둥 안 */
+  .x-txt.a2{display:none}
+  .x-txt.a{bottom:calc(50% + var(--imgH) / 2 + 14px)}
+  .x-txt.b{top:calc(50% + var(--imgH) / 2 + 10px)}
+  .x-go{top:calc(50% + var(--imgH) / 2 + 40px);height:36px}
+  .x-col .x-txt{font-size:10.5px}
+  /* 회차 표시: 괄호 없이 두 줄, 기둥 바깥 좌우 */
+  .x-lab{font-size:11px;line-height:1.3;transform:none!important}
+  .x-lab .pp{display:none}
+  .x-lab .tm{display:block}
+  .x-lab.l1,.x-lab.l3{top:calc(50% - var(--imgH) / 2 + 10px)!important}
+  .x-lab.l2,.x-lab.l4{top:calc(50% + var(--imgH) / 2 - 38px)!important}
+  .x-lab.l1,.x-lab.l2{left:max(14px,env(safe-area-inset-left,0px))!important;right:auto!important}
+  .x-lab.l3,.x-lab.l4{right:max(14px,env(safe-area-inset-right,0px))!important;left:auto!important;text-align:right}
+  /* 점: 기둥 바로 바깥 두 줄만, 회차 표시 높이는 비움 */
+  .x-dots i.c1,.x-dots i.c2,.x-dots i.band{display:none}
+  .x-dots i.c0{left:calc(50% - var(--colW) / 2 - 16px)}
+  .x-dots i.c3{left:calc(50% + var(--colW) / 2 + 16px)}
+  /* 질감 선: 너무 빽빽하지 않게 일부만 */
+  .h-vl:nth-of-type(3n+2),.h-hl:nth-of-type(2n){display:none}
+}
 </style>
 <style>html{color-scheme:light}@media (prefers-color-scheme:dark){html{color-scheme:dark}}body{margin:0}.sr{position:absolute;left:-9999px}</style>
 </head>
@@ -183,23 +430,65 @@ figure{margin:0}
     <nav><a href="#po">공연 소개</a><a href="#pf">프로필</a><a href="#cr">크레딧</a><a class="cta" href="#sh">예매하기</a></nav>
   </div>
 
+  <!-- hero: 가운데 기둥 + 가로 띠 + 점 격자 + 로고 질감(점 세로줄·점선 가로줄·인쇄 질감). 띠 위 네 지점은 네 회차, 가운데 창에는 로고 -->
   <section class="hero" id="top" aria-labelledby="ttl">
-    <div>
-      <h1 id="ttl" style="margin:0"><span class="sr">BUFFER 버퍼 2026.11.14–15</span><span class="crop logo" style="--ar:4977/2934;--w:141.91%;--l:-18.18%;--t:-28.90%"><picture><source srcset="/assets/design/LOGO/White/BUFFER%20Logo_Date_White.png" media="(prefers-color-scheme:dark)"><img src="/assets/design/LOGO/Black/BUFFER%20Logo_Date.png" alt="" width="7063" height="5008"></picture></span></h1>
-      <div class="sub"><span>2026.11.14 SAT — 11.15 SUN</span><span>3PM / 7PM</span><span>Space Padong</span></div>
-      <div class="sub"><span>총 4회차</span><span>자유석 · 1인 1매</span></div>
-      <a class="btn solid go" href="#sh">예매하기 ↓</a>
+    <h1 id="ttl" class="x-ttl"><span class="sr">BUFFER 버퍼 2026.11.14–15</span><b aria-hidden="true">BUFFER</b><b aria-hidden="true">11.14<span class="dash">–</span>15</b></h1>
+    <div class="x-stage">
+      <i class="h-vl" style="--x:3%;--t:0%;--b:55%;--g:5px" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:7.5%;--t:22%;--b:18%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:12%;--t:0%;--b:70%;--g:5px" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:12.6%;--t:0%;--b:74%;--g:5px" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:13.2%;--t:0%;--b:66%;--g:5px" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:19%;--t:40%;--b:0%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:24%;--t:8%;--b:30%;--g:5px" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:29%;--t:0%;--b:46%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:33.5%;--t:58%;--b:6%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:38%;--t:12%;--b:52%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:40.5%;--t:30%;--b:20%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:60%;--t:0%;--b:38%;--g:5px" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:62.5%;--t:46%;--b:4%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:67%;--t:14%;--b:50%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:71.5%;--t:0%;--b:62%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:72.1%;--t:0%;--b:68%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:72.7%;--t:0%;--b:58%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:78%;--t:52%;--b:0%;--g:5px" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:83%;--t:6%;--b:26%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:88.5%;--t:0%;--b:44%" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:93%;--t:34%;--b:10%;--g:5px" aria-hidden="true"></i>
+      <i class="h-vl" style="--x:97%;--t:0%;--b:64%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:19%;--l:0%;--r:0%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:27%;--l:0%;--r:58%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:33%;--l:46%;--r:0%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:40.5%;--l:8%;--r:30%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:63%;--l:0%;--r:0%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:69%;--l:34%;--r:12%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:76%;--l:0%;--r:46%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:84%;--l:52%;--r:0%" aria-hidden="true"></i>
+      <i class="h-hl" style="--y:90%;--l:18%;--r:18%" aria-hidden="true"></i>
+      <div class="x-band" aria-hidden="true"></div>
+      <div class="x-dots" id="xdots" aria-hidden="true"></div>
+      <div class="x-col">
+        <i class="x-spine" aria-hidden="true"></i>
+        <p class="x-txt a2">BUFFER 버퍼. Presented by Team Sfumato.</p>
+        <p class="x-txt a">2026.11.14 SAT — 11.15 SUN. 3PM / 7PM. Space Padong.</p>
+        <figure class="x-img"><picture><source srcset="/hero/logo-center-black.png" media="(prefers-color-scheme:dark)"><img class="x-logo" src="/hero/logo-center-white.png" alt="" width="720" height="437"></picture></figure>
+        <p class="x-txt b" id="xfit"><span class="fit">총 4회차. 예매 오픈 11.04 (수) 20:00.</span></p>
+        <a class="x-go" href="#sh">예매하기 ↓</a>
+      </div>
+      <a class="x-lab l1" href="#sh"><span class="pp">(</span>11.14 SAT <span class="tm">3PM</span><span class="pp">)</span></a>
+      <a class="x-lab l2" href="#sh"><span class="pp">(</span>11.14 SAT <span class="tm">7PM</span><span class="pp">)</span></a>
+      <a class="x-lab l3" href="#sh"><span class="pp">(</span>11.15 SUN <span class="tm">3PM</span><span class="pp">)</span></a>
+      <a class="x-lab l4" href="#sh"><span class="pp">(</span>11.15 SUN <span class="tm">7PM</span><span class="pp">)</span></a>
     </div>
   </section>
-  <div class="tempo" id="tempo" aria-hidden="true"></div>
 </div>
 <div class="marq" aria-hidden="true"><div><span>PLEASE WAIT AT SPACE PADONG — 2026.11.14–15. — 3PM / 7PM — BUFFER 버퍼 — </span><span>PLEASE WAIT AT SPACE PADONG — 2026.11.14–15. — 3PM / 7PM — BUFFER 버퍼 — </span><span>PLEASE WAIT AT SPACE PADONG — 2026.11.14–15. — 3PM / 7PM — BUFFER 버퍼 — </span><span>PLEASE WAIT AT SPACE PADONG — 2026.11.14–15. — 3PM / 7PM — BUFFER 버퍼 — </span><span>PLEASE WAIT AT SPACE PADONG — 2026.11.14–15. — 3PM / 7PM — BUFFER 버퍼 — </span><span>PLEASE WAIT AT SPACE PADONG — 2026.11.14–15. — 3PM / 7PM — BUFFER 버퍼 — </span><span>PLEASE WAIT AT SPACE PADONG — 2026.11.14–15. — 3PM / 7PM — BUFFER 버퍼 — </span><span>PLEASE WAIT AT SPACE PADONG — 2026.11.14–15. — 3PM / 7PM — BUFFER 버퍼 — </span></div></div>
 
 <div class="wrap">
   <section class="zone" aria-labelledby="st">
+    <div class="label" id="st">예매 오픈 2026.11.04 (수) 20:00</div>
     <div class="status">
       <div>
-        <div class="label" id="st">예매 오픈 2026.11.04 (수) 20:00</div>
         <div class="big" id="big">—</div>
       </div>
       <span class="pill" id="pill">—</span>
@@ -217,23 +506,20 @@ figure{margin:0}
     <div id="mine"></div>
   </section>
 
-  <section class="zone" id="po" aria-labelledby="pot">
+  <section class="zone wide" id="po" aria-labelledby="pot">
     <div class="label" id="pot">공연 소개</div>
-    <div class="intro">
-      <div><span class="crop base" style="--ar:4839/2934;--w:145.96%;--l:-18.70%;--t:-40.63%"><picture><source srcset="/assets/design/LOGO/White/BUFFER%20Logo_White.png" media="(prefers-color-scheme:dark)"><img src="/assets/design/LOGO/Black/BUFFER%20Logo.png" alt="BUFFER 버퍼" width="7063" height="5008"></picture></span></div>
-      <p><b>BUFFER 버퍼</b><br>Space Padong · 2026.11.14(토)–15(일) · 3PM / 7PM<br>Presented by Team Sfumato</p>
-      <p>기다림의 시간을 채우는 나만의 방법을 알려주세요.<br>Please wait at Space Padong.</p>
-    </div>
+    <div class="po-logo"><span class="crop base" style="--ar:4839/2934;--w:145.96%;--l:-18.70%;--t:-40.63%"><picture><source srcset="/assets/design/LOGO/White/BUFFER%20Logo_White.png" media="(prefers-color-scheme:dark)"><img src="/assets/design/LOGO/Black/BUFFER%20Logo.png" alt="BUFFER 버퍼" width="7063" height="5008"></picture></span></div>
     <div class="film">
-      <video src="/assets/design/MOTION/BUFFER%20INFO.mp4" autoplay muted loop playsinline preload="metadata" aria-label="BUFFER INFO 모션 영상"></video>
+      <a class="film-link" href="https://www.instagram.com/sfumato.kr/" target="_blank" rel="noopener" aria-label="Team Sfumato 인스타그램 열기 (새 창)"><video src="/assets/design/MOTION/BUFFER%20INFO.mp4" autoplay muted loop playsinline preload="metadata" aria-hidden="true"></video></a>
       <div class="teaser" id="teaser" role="img" aria-label="티저 영상 준비 중"><span class="label">TEASER</span><b>준비 중 · COMING SOON</b></div>
+      <p class="po-cap c1"><b>BUFFER 버퍼</b><br>Space Padong · 2026.11.14(토)–15(일) · <span class="nw">3PM / 7PM</span><br>Presented by Team Sfumato</p>
+      <p class="po-cap c2">기다림의 시간을 채우는 나만의 방법을 알려주세요.<br>Please wait at Space Padong.</p>
     </div>
   </section>
 
-  <section class="zone" id="pf" aria-labelledby="pft">
+  <section class="zone wide" id="pf" aria-labelledby="pft">
     <div class="label" id="pft">프로필 · 퍼포머</div>
-    <div class="profiles" id="profiles"></div>
-    <figure class="group" id="group"></figure>
+    <div class="pf" id="profiles" role="region" aria-roledescription="carousel" aria-label="퍼포머 프로필"></div>
   </section>
 
   <section class="zone" id="cr" aria-labelledby="crt">
@@ -254,8 +540,8 @@ figure{margin:0}
       <div><dt>조무대감독</dt><dd>노순모</dd></div>
       <div><dt>디자인</dt><dd>배준호</dd></div>
       <div><dt>사진</dt><dd>최돈영</dd></div>
-      <div><dt>홍보영상</dt><dd>엄세은 이동욱 전호영 조유정 김휘진 이원재</dd></div>
-      <div class="wide"><dt>퍼포머</dt><dd>김민 김선율 김수아 김지민 염지원 이봄 이승환 임세령 최승영</dd></div>
+      <div><dt>홍보영상</dt><dd>엄세은 이동욱 전호영<br>조유정 김휘진 이원재</dd></div>
+      <div class="wide"><dt>퍼포머</dt><dd>김민 김선율 김수아 김지민 염지원<br>이봄 이승환 임세령 최승영</dd></div>
     </dl>
   </section>
 
@@ -263,21 +549,16 @@ figure{margin:0}
     <div class="label" id="inf">예매 안내</div>
     <dl class="facts">
       <div class="fact"><dt>회차</dt><dd>11.14 · 11.15<br>각 3PM / 7PM</dd></div>
-      <div class="fact"><dt>좌석</dt><dd>자유석<br>회차당 35석</dd></div>
-      <div class="fact"><dt>매수</dt><dd>1인 1매<br>고정</dd></div>
-      <div class="fact"><dt>입력 정보</dt><dd>이름 · 전화번호</dd></div>
     </dl>
-    <p class="notice"><strong>아카이빙 안내</strong><br>11.14(토) 7PM / 11.15(일) 7PM 공연 중 사진 및 영상 촬영이 예정되어 있습니다. 관객의 얼굴이 포함될 수 있으며 추후 SNS 및 보도자료에 활용될 예정이오니 예매에 참고 바랍니다. 티켓 예매 시 본 아카이빙 안내사항에 동의한 것으로 간주됩니다.</p>
   </section>
 
   <footer><span>BUFFER 버퍼 · Presented by Team Sfumato</span><span>11.14 — 11.15 · Space Padong</span></footer>
-  <div style="padding-bottom:32px"><span class="crop sfu" style="--ar:4977/3107;--w:141.91%;--l:-18.18%;--t:-16.45%"><picture><source srcset="/assets/design/LOGO/White/BUFFER%20Logo_Sfumato_White.png" media="(prefers-color-scheme:dark)"><img src="/assets/design/LOGO/Black/BUFFER%20Logo_Sfumato.png" alt="BUFFER 버퍼 2026.11.14–15 Sfumato" width="7063" height="5008"></picture></span></div>
+  <div style="padding:8px 0 40px"><span class="crop sfu" style="--ar:4977/3107;--w:141.91%;--l:-18.18%;--t:-16.45%"><picture><source srcset="/assets/design/LOGO/White/BUFFER%20Logo_Sfumato_White.png" media="(prefers-color-scheme:dark)"><img src="/assets/design/LOGO/Black/BUFFER%20Logo_Sfumato.png" alt="BUFFER 버퍼 2026.11.14–15 Sfumato" width="7063" height="5008"></picture></span></div>
 </div>
 
 <div id="live" class="sr" aria-live="polite" style="position:absolute;left:-9999px"></div>
 <div id="overlay"></div>
 <div id="lightbox"></div>
-<div id="fall" aria-hidden="true"></div>
 
 <script src="/app.js"></script>
 </body>

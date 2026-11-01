@@ -6,6 +6,10 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 
+if (typeof process.loadEnvFile === "function") {
+  try { process.loadEnvFile(); } catch (e) { if (e && e.code !== "ENOENT") throw e; }
+}
+
 const PORT = Number(process.env.PORT || 3000);
 const OPEN_AT = new Date(process.env.OPEN_AT || "2026-11-04T20:00:00+09:00").getTime();
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
@@ -13,7 +17,17 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "tickets.db"
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 const BOOK_RATE_MAX = Number(process.env.BOOK_RATE_MAX || 30); // IP당 10분 내 예매 시도 한도 (공용 와이파이를 고려해 넉넉히)
 const TICKET_PRICE = Number(process.env.TICKET_PRICE || 0); // 표시용 금액(원). 결제는 모의 처리라 실제 청구는 없음
-const CAP = 35; //회차당 온라인 예매석 (총 40석 중 유보석 5석 제외)
+const CAP = 35; // 회차당 온라인 예매석 기본값 (총 40석 중 유보석 5석 제외)
+// 회차별 좌석 수: SEATS="A=35,B=30,C=35,D=28" 처럼 지정. 빠진 회차는 기본값(CAP)
+const SEATS = (() => {
+  const m = { A: CAP, B: CAP, C: CAP, D: CAP };
+  for (const part of String(process.env.SEATS || "").split(",")) {
+    const r = /^\s*([A-D])\s*=\s*(\d{1,2})\s*$/i.exec(part);
+    if (r) m[r[1].toUpperCase()] = Number(r[2]);
+    else if (part.trim()) { console.error(`SEATS 형식이 올바르지 않습니다: "${part}" (예: A=35,B=30,C=35,D=28)`); process.exit(1); }
+  }
+  return m;
+})();
 const PUBLIC_DIR = path.join(__dirname, "public");
 const ASSETS_DIR = path.join(__dirname, "assets"); // 디자인 원본을 /assets/ 로 그대로 서빙
 
@@ -63,9 +77,10 @@ const q = {
 const pad = (n) => (n < 10 ? "0" : "") + n;
 const isOpen = () => Date.now() >= OPEN_AT;
 
-function remainingByShow() {
+// 화면에는 남은 좌석 수를 보내지 않고 매진 여부만 보냄
+function showsPublic() {
   const used = Object.fromEntries(q.countByShow.all().map((r) => [r.show_id, r.n]));
-  return SHOWS.map((s) => ({ ...s, remaining: Math.max(0, CAP - (used[s.id] || 0)) }));
+  return SHOWS.map((s) => ({ ...s, soldOut: (used[s.id] || 0) >= SEATS[s.id] }));
 }
 
 function normalizePhone(v) {
@@ -85,7 +100,7 @@ function book(showId, name, phone) {
       db.exec("ROLLBACK");
       return { error: "duplicate" };
     }
-    if (q.countShow.get(showId).n >= CAP) {
+    if (q.countShow.get(showId).n >= SEATS[showId]) {
       db.exec("ROLLBACK");
       return { error: "soldout" };
     }
@@ -170,21 +185,21 @@ async function api(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
 
   if (route === "GET /api/shows") {
-    return send(res, 200, { openAt: new Date(OPEN_AT).toISOString(), now: new Date().toISOString(), open: isOpen(), cap: CAP, price: TICKET_PRICE, shows: remainingByShow() });
+    return send(res, 200, { openAt: new Date(OPEN_AT).toISOString(), now: new Date().toISOString(), open: isOpen(), price: TICKET_PRICE, shows: showsPublic() });
   }
 
   if (route === "POST /api/book") {
     if (limited("book:" + ip, BOOK_RATE_MAX, 600000)) return send(res, 429, { error: "rate_limited", message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." });
     const b = await readJson(req);
     if (!isOpen()) return send(res, 403, { error: "not_open", message: "아직 예매가 열리지 않았습니다." });
-    if (b.consent !== true) return send(res, 400, { error: "consent", message: "아카이빙 안내에 동의해야 예매할 수 있습니다." });
+    if (b.consent !== true) return send(res, 400, { error: "consent", message: "아카이빙·트리거 워닝 안내를 확인해야 예매할 수 있습니다." });
     if (!SHOW_IDS.has(b.show)) return send(res, 400, { error: "show", message: "회차를 선택해주세요." });
     const name = cleanName(b.name);
     if (!name) return send(res, 400, { error: "name", message: "이름을 입력해주세요." });
     const phone = normalizePhone(b.phone);
     if (!phone) return send(res, 400, { error: "phone", message: "휴대전화 번호를 010-0000-0000 형식으로 입력해주세요." });
     const r = book(b.show, name, phone);
-    if (r.error === "duplicate") return send(res, 409, { error: "duplicate", message: "이 전화번호로 이미 예매하셨습니다. 1인 1매만 가능합니다." });
+    if (r.error === "duplicate") return send(res, 409, { error: "duplicate", message: "이 전화번호로 이미 예매하셨습니다." });
     if (r.error === "soldout") return send(res, 409, { error: "soldout", message: "이 회차는 매진되었습니다. 다른 회차를 선택해주세요." });
     return send(res, 201, { code: r.code, show: b.show });
   }
@@ -218,7 +233,7 @@ async function api(req, res, url) {
           "Content-Disposition": 'attachment; filename="buffer-reservations.csv"',
         });
       }
-      return send(res, 200, { reservations: rows.map((r) => ({ show: r.show_id, seat: r.seat, code: r.code, name: r.name, phone: r.phone, createdAt: r.created_at })) });
+      return send(res, 200, { seats: SEATS, reservations: rows.map((r) => ({ show: r.show_id, seat: r.seat, code: r.code, name: r.name, phone: r.phone, createdAt: r.created_at })) });
     }
     const m = /^DELETE \/api\/admin\/reservations\/(BUF-[A-D]-\d{2})$/.exec(route);
     if (m) {
@@ -232,7 +247,7 @@ async function api(req, res, url) {
 
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".mp4": "video/mp4", ".ico": "image/x-icon",
+  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".mp4": "video/mp4", ".ico": "image/x-icon", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8",
 };
 
 function serveStatic(req, res, url) {
@@ -270,6 +285,34 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`BUFFER ticket server on :${PORT}  (예매 오픈 ${new Date(OPEN_AT).toISOString()}, 관리자 ${ADMIN_TOKEN ? "켜짐" : "꺼짐"})`);
+  const kstOpenStr = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(OPEN_AT));
+
+  const statusText = isOpen()
+    ? "🟢 예매 진행 중 (오픈됨)"
+    : `🟡 오픈 전 (오픈 시각: ${kstOpenStr} KST)`;
+
+  const adminText = ADMIN_TOKEN
+    ? "🟢 켜짐"
+    : "⚪️ 꺼짐 (.env에 ADMIN_TOKEN 설정 시 활성화)";
+
+  const seatsInfo = SHOWS.map((x) => `${x.id}=${SEATS[x.id]}`).join(" ");
+
+  console.log(`
+  🎟️  BUFFER 티켓 예매 서버 실행 완료
+
+  ➜  접속 주소:      http://localhost:${PORT}/
+  ➜  관리자 페이지:  http://localhost:${PORT}/admin
+  ➜  예매 상태:      ${statusText}
+  ➜  회차별 좌석:    ${seatsInfo}
+  ➜  관리자 기능:    ${adminText}
+`);
 });
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { server.close(() => { db.close(); process.exit(0); }); });
