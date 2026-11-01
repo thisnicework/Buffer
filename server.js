@@ -1,10 +1,11 @@
-// BUFFER 버퍼 티켓 예매 서버 — Node 22.5+ (내장 node:sqlite 사용, 외부 패키지 없음)
+// BUFFER 버퍼 티켓 예매 서버 — Node 22.5+ (Supabase Cloud + 내장 node:sqlite 폴백)
 "use strict";
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
+const { createClient } = require("@supabase/supabase-js");
 
 if (typeof process.loadEnvFile === "function") {
   try { process.loadEnvFile(); } catch (e) { if (e && e.code !== "ENOENT") throw e; }
@@ -18,6 +19,15 @@ const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 const BOOK_RATE_MAX = Number(process.env.BOOK_RATE_MAX || 30); // IP당 10분 내 예매 시도 한도 (공용 와이파이를 고려해 넉넉히)
 const TICKET_PRICE = Number(process.env.TICKET_PRICE || 0); // 표시용 금액(원). 결제는 모의 처리라 실제 청구는 없음
 const CAP = 35; // 회차당 온라인 예매석 기본값 (총 40석 중 유보석 5석 제외)
+
+// Supabase 연동 설정
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://qatrsegoqwandtsasunp.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_KEY || "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3";
+const hasSupabase = Boolean(SUPABASE_URL && SUPABASE_KEY);
+const supabase = hasSupabase
+  ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
+  : null;
+
 // 회차별 좌석 수: SEATS="A=35,B=30,C=35,D=28" 처럼 지정. 빠진 회차는 기본값(CAP)
 const SEATS = (() => {
   const m = { A: CAP, B: CAP, C: CAP, D: CAP };
@@ -44,9 +54,10 @@ if (!Number.isFinite(OPEN_AT)) {
   process.exit(1);
 }
 
+// 로컬 SQLite 백업/폴백 저장소 초기화
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-const db = new DatabaseSync(DB_PATH);
-db.exec(`
+const sqliteDb = new DatabaseSync(DB_PATH);
+sqliteDb.exec(`
   PRAGMA journal_mode = WAL;
   CREATE TABLE IF NOT EXISTS reservations (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,28 +71,20 @@ db.exec(`
   );
 `);
 
-const q = {
-  countByShow: db.prepare("SELECT show_id, COUNT(*) AS n FROM reservations GROUP BY show_id"),
-  countShow: db.prepare("SELECT COUNT(*) AS n FROM reservations WHERE show_id = ?"),
-  seatsOfShow: db.prepare("SELECT seat FROM reservations WHERE show_id = ? ORDER BY seat"),
-  byPhone: db.prepare("SELECT 1 FROM reservations WHERE phone = ?"),
-  insert: db.prepare(
-    "INSERT INTO reservations (show_id, seat, code, name, phone, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  ),
-  lookup: db.prepare("SELECT show_id, seat, code, name, phone, created_at FROM reservations WHERE code = ? AND phone = ?"),
-  cancel: db.prepare("DELETE FROM reservations WHERE code = ? AND phone = ?"),
-  all: db.prepare("SELECT show_id, seat, code, name, phone, created_at FROM reservations ORDER BY show_id, seat"),
-  adminDelete: db.prepare("DELETE FROM reservations WHERE code = ?"),
+const sqliteQueries = {
+  countByShow: sqliteDb.prepare("SELECT show_id, COUNT(*) AS n FROM reservations GROUP BY show_id"),
+  countShow: sqliteDb.prepare("SELECT COUNT(*) AS n FROM reservations WHERE show_id = ?"),
+  seatsOfShow: sqliteDb.prepare("SELECT seat FROM reservations WHERE show_id = ? ORDER BY seat"),
+  byPhone: sqliteDb.prepare("SELECT 1 FROM reservations WHERE phone = ?"),
+  insert: sqliteDb.prepare("INSERT INTO reservations (show_id, seat, code, name, phone, created_at) VALUES (?, ?, ?, ?, ?, ?)"),
+  lookup: sqliteDb.prepare("SELECT show_id, seat, code, name, phone, created_at FROM reservations WHERE code = ? AND phone = ?"),
+  cancel: sqliteDb.prepare("DELETE FROM reservations WHERE code = ? AND phone = ?"),
+  all: sqliteDb.prepare("SELECT show_id, seat, code, name, phone, created_at FROM reservations ORDER BY show_id, seat"),
+  adminDelete: sqliteDb.prepare("DELETE FROM reservations WHERE code = ?"),
 };
 
 const pad = (n) => (n < 10 ? "0" : "") + n;
 const isOpen = () => Date.now() >= OPEN_AT;
-
-// 화면에는 남은 좌석 수를 보내지 않고 매진 여부만 보냄
-function showsPublic() {
-  const used = Object.fromEntries(q.countByShow.all().map((r) => [r.show_id, r.n]));
-  return SHOWS.map((s) => ({ ...s, soldOut: (used[s.id] || 0) >= SEATS[s.id] }));
-}
 
 function normalizePhone(v) {
   const d = String(v || "").replace(/\D/g, "");
@@ -92,32 +95,204 @@ function cleanName(v) {
   return s.length >= 1 && s.length <= 30 ? s : null;
 }
 
-// 예매: 한도 확인·좌석 배정·저장을 하나의 트랜잭션으로 처리
-function book(showId, name, phone) {
-  db.exec("BEGIN IMMEDIATE");
+// ---- Supabase / SQLite 통합 데이터 계층 ----
+
+// 1. 회차별 예매 수 집계
+async function dbGetCountsByShow() {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from("reservations").select("show_id");
+      if (!error && Array.isArray(data)) {
+        const counts = { A: 0, B: 0, C: 0, D: 0 };
+        for (const r of data) {
+          if (counts[r.show_id] !== undefined) counts[r.show_id]++;
+        }
+        return counts;
+      }
+      if (error && error.code === "PGRST205") {
+        console.warn("⚠️  [Supabase] reservations 테이블이 아직 생성되지 않았습니다. supabase-schema.sql을 실행해주세요.");
+      }
+    } catch (e) {
+      console.warn("⚠️  [Supabase] 집계 조회 중 에러, 로컬 DB로 임시 폴백:", e.message);
+    }
+  }
+  return Object.fromEntries(sqliteQueries.countByShow.all().map((r) => [r.show_id, r.n]));
+}
+
+// 2. 공개 회차 정보 (매진 여부만 반환)
+async function showsPublic() {
+  const used = await dbGetCountsByShow();
+  return SHOWS.map((s) => ({ ...s, soldOut: (used[s.id] || 0) >= SEATS[s.id] }));
+}
+
+// 3. SQLite 예매 트랜잭션 (폴백용)
+function bookSqlite(showId, name, phone) {
+  sqliteDb.exec("BEGIN IMMEDIATE");
   try {
-    if (q.byPhone.get(phone)) {
-      db.exec("ROLLBACK");
+    if (sqliteQueries.byPhone.get(phone)) {
+      sqliteDb.exec("ROLLBACK");
       return { error: "duplicate" };
     }
-    if (q.countShow.get(showId).n >= SEATS[showId]) {
-      db.exec("ROLLBACK");
+    if (sqliteQueries.countShow.get(showId).n >= SEATS[showId]) {
+      sqliteDb.exec("ROLLBACK");
       return { error: "soldout" };
     }
-    const used = new Set(q.seatsOfShow.all(showId).map((r) => r.seat));
+    const used = new Set(sqliteQueries.seatsOfShow.all(showId).map((r) => r.seat));
     let seat = 1;
     while (used.has(seat)) seat++;
     const code = `BUF-${showId}-${pad(seat)}`;
-    q.insert.run(showId, seat, code, name, phone, new Date().toISOString());
-    db.exec("COMMIT");
-    return { code, seat };
+    sqliteQueries.insert.run(showId, seat, code, name, phone, new Date().toISOString());
+    sqliteDb.exec("COMMIT");
+    return { code, seat, show: showId };
   } catch (e) {
-    try { db.exec("ROLLBACK"); } catch (_) {}
+    try { sqliteDb.exec("ROLLBACK"); } catch (_) {}
     throw e;
   }
 }
 
-// ---- 간단한 요청 제한 (IP당) ----
+// 4. 예매 처리 (Supabase RPC 원자적 락 우선, 테이블 쿼리 폴백, SQLite 폴백)
+async function dbBook(showId, name, phone) {
+  if (supabase) {
+    try {
+      // 1순위: 분산 락(advisory lock)이 적용된 RPC book_ticket 호출
+      const { data, error } = await supabase.rpc("book_ticket", {
+        p_show_id: showId,
+        p_name: name,
+        p_phone: phone,
+        p_cap: SEATS[showId] || CAP,
+      });
+
+      if (!error && data) {
+        return data; // { code, seat, show } or { error: "duplicate" } or { error: "soldout" }
+      }
+
+      // 2순위: RPC 미배포 시 Supabase 테이블 직접 처리
+      if (!error || error.code !== "PGRST205") {
+        // 전화번호 중복 체크
+        const { data: dup } = await supabase
+          .from("reservations")
+          .select("id")
+          .eq("phone", phone)
+          .maybeSingle();
+        if (dup) return { error: "duplicate" };
+
+        // 회차 좌석 확인
+        const { data: rows, error: rErr } = await supabase
+          .from("reservations")
+          .select("seat")
+          .eq("show_id", showId)
+          .order("seat");
+        if (rErr) throw rErr;
+
+        if ((rows || []).length >= (SEATS[showId] || CAP)) {
+          return { error: "soldout" };
+        }
+
+        const used = new Set((rows || []).map((r) => r.seat));
+        let seat = 1;
+        while (used.has(seat)) seat++;
+        const code = `BUF-${showId}-${pad(seat)}`;
+
+        const { error: insErr } = await supabase.from("reservations").insert({
+          show_id: showId,
+          seat: seat,
+          code: code,
+          name: name,
+          phone: phone,
+          created_at: new Date().toISOString(),
+        });
+
+        if (insErr) {
+          if (insErr.code === "23505") return { error: "duplicate" };
+          throw insErr;
+        }
+
+        return { code, seat, show: showId };
+      }
+    } catch (e) {
+      console.warn("⚠️  [Supabase] 예매 중 에러 발생, 로컬 DB로 처리합니다:", e.message);
+    }
+  }
+
+  return bookSqlite(showId, name, phone);
+}
+
+// 5. 예매 내역 조회
+async function dbLookup(code, phone) {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("show_id, seat, code, name, phone, created_at")
+        .eq("code", code)
+        .eq("phone", phone)
+        .maybeSingle();
+      if (!error && data) return data;
+    } catch (e) {
+      console.warn("⚠️  [Supabase] 조회 중 에러:", e.message);
+    }
+  }
+  return sqliteQueries.lookup.get(code, phone);
+}
+
+// 6. 예매 취소
+async function dbCancel(code, phone) {
+  if (supabase) {
+    try {
+      const { data: row } = await supabase
+        .from("reservations")
+        .select("id")
+        .eq("code", code)
+        .eq("phone", phone)
+        .maybeSingle();
+      if (row) {
+        await supabase.from("reservations").delete().eq("code", code).eq("phone", phone);
+        return true;
+      }
+    } catch (e) {
+      console.warn("⚠️  [Supabase] 취소 중 에러:", e.message);
+    }
+  }
+  const row = sqliteQueries.lookup.get(code, phone);
+  if (row) {
+    sqliteQueries.cancel.run(code, phone);
+    return true;
+  }
+  return false;
+}
+
+// 7. 관리자 전체 목록 조회
+async function dbGetAll() {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("reservations")
+        .select("show_id, seat, code, name, phone, created_at")
+        .order("show_id", { ascending: true })
+        .order("seat", { ascending: true });
+      if (!error && Array.isArray(data)) return data;
+    } catch (e) {
+      console.warn("⚠️  [Supabase] 관리자 목록 조회 중 에러:", e.message);
+    }
+  }
+  return sqliteQueries.all.all();
+}
+
+// 8. 관리자 예매 단건 삭제
+async function dbAdminDelete(code) {
+  if (supabase) {
+    try {
+      const { error } = await supabase.from("reservations").delete().eq("code", code);
+      if (!error) return true;
+    } catch (e) {
+      console.warn("⚠️  [Supabase] 관리자 삭제 중 에러:", e.message);
+    }
+  }
+  sqliteQueries.adminDelete.run(code);
+  return true;
+}
+
+// ---- 요청 제한 (IP당) ----
 const hits = new Map();
 function limited(ip, max, windowMs) {
   const now = Date.now();
@@ -185,11 +360,20 @@ async function api(req, res, url) {
   const route = `${req.method} ${url.pathname}`;
 
   if (route === "GET /api/shows") {
-    return send(res, 200, { openAt: new Date(OPEN_AT).toISOString(), now: new Date().toISOString(), open: isOpen(), price: TICKET_PRICE, shows: showsPublic() });
+    const shows = await showsPublic();
+    return send(res, 200, {
+      openAt: new Date(OPEN_AT).toISOString(),
+      now: new Date().toISOString(),
+      open: isOpen(),
+      price: TICKET_PRICE,
+      shows,
+    });
   }
 
   if (route === "POST /api/book") {
-    if (limited("book:" + ip, BOOK_RATE_MAX, 600000)) return send(res, 429, { error: "rate_limited", message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." });
+    if (limited("book:" + ip, BOOK_RATE_MAX, 600000)) {
+      return send(res, 429, { error: "rate_limited", message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." });
+    }
     const b = await readJson(req);
     if (!isOpen()) return send(res, 403, { error: "not_open", message: "아직 예매가 열리지 않았습니다." });
     if (b.consent !== true) return send(res, 400, { error: "consent", message: "아카이빙·트리거 워닝 안내를 확인해야 예매할 수 있습니다." });
@@ -198,21 +382,28 @@ async function api(req, res, url) {
     if (!name) return send(res, 400, { error: "name", message: "이름을 입력해주세요." });
     const phone = normalizePhone(b.phone);
     if (!phone) return send(res, 400, { error: "phone", message: "휴대전화 번호를 010-0000-0000 형식으로 입력해주세요." });
-    const r = book(b.show, name, phone);
+
+    const r = await dbBook(b.show, name, phone);
     if (r.error === "duplicate") return send(res, 409, { error: "duplicate", message: "이 전화번호로 이미 예매하셨습니다." });
     if (r.error === "soldout") return send(res, 409, { error: "soldout", message: "이 회차는 매진되었습니다. 다른 회차를 선택해주세요." });
     return send(res, 201, { code: r.code, show: b.show });
   }
 
   if (route === "POST /api/lookup" || route === "POST /api/cancel") {
-    if (limited("lookup:" + ip, 60, 600000)) return send(res, 429, { error: "rate_limited", message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." });
+    if (limited("lookup:" + ip, 60, 600000)) {
+      return send(res, 429, { error: "rate_limited", message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." });
+    }
     const b = await readJson(req);
     const phone = normalizePhone(b.phone);
     const code = String(b.code || "").trim().toUpperCase();
-    const row = phone && /^BUF-[A-D]-\d{2}$/.test(code) ? q.lookup.get(code, phone) : null;
+    if (!phone || !/^BUF-[A-D]-\d{2}$/.test(code)) {
+      return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 예매번호와 전화번호를 확인해주세요." });
+    }
+    const row = await dbLookup(code, phone);
     if (!row) return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 예매번호와 전화번호를 확인해주세요." });
+
     if (route === "POST /api/cancel") {
-      q.cancel.run(code, phone);
+      await dbCancel(code, phone);
       return send(res, 200, { ok: true });
     }
     return send(res, 200, { code: row.code, show: row.show_id, name: row.name, phone: row.phone });
@@ -220,24 +411,38 @@ async function api(req, res, url) {
 
   if (url.pathname.startsWith("/api/admin/")) {
     if (!adminOk(req)) return send(res, 401, { error: "unauthorized" });
+
     if (route === "GET /api/admin/reservations") {
-      const rows = q.all.all();
+      const rows = await dbGetAll();
       if (url.searchParams.get("format") === "csv") {
         const head = "회차,예매번호,이름,전화번호,예매시각\n";
         const body = rows.map((r) => {
           const s = SHOWS.find((x) => x.id === r.show_id);
           return [`${s.date} ${s.dowKo} ${s.time}`, r.code, r.name, r.phone, r.created_at].map(csvCell).join(",");
         }).join("\n");
-        return send(res, 200, "﻿" + head + body + "\n", {
+        return send(res, 200, "\uFEFF" + head + body + "\n", {
           "Content-Type": "text/csv; charset=utf-8",
           "Content-Disposition": 'attachment; filename="buffer-reservations.csv"',
         });
       }
-      return send(res, 200, { seats: SEATS, reservations: rows.map((r) => ({ show: r.show_id, seat: r.seat, code: r.code, name: r.name, phone: r.phone, createdAt: r.created_at })) });
+      return send(res, 200, {
+        db: supabase ? "supabase" : "sqlite",
+        supabaseUrl: supabase ? SUPABASE_URL : null,
+        seats: SEATS,
+        reservations: rows.map((r) => ({
+          show: r.show_id,
+          seat: r.seat,
+          code: r.code,
+          name: r.name,
+          phone: r.phone,
+          createdAt: r.created_at,
+        })),
+      });
     }
+
     const m = /^DELETE \/api\/admin\/reservations\/(BUF-[A-D]-\d{2})$/.exec(route);
     if (m) {
-      q.adminDelete.run(m[1]);
+      await dbAdminDelete(m[1]);
       return send(res, 200, { ok: true });
     }
   }
@@ -303,6 +508,10 @@ server.listen(PORT, () => {
     ? "🟢 켜짐"
     : "⚪️ 꺼짐 (.env에 ADMIN_TOKEN 설정 시 활성화)";
 
+  const dbText = supabase
+    ? `🟢 Supabase 연동 (${SUPABASE_URL})`
+    : `⚪️ SQLite 로컬 모드 (${DB_PATH})`;
+
   const seatsInfo = SHOWS.map((x) => `${x.id}=${SEATS[x.id]}`).join(" ");
 
   console.log(`
@@ -310,9 +519,18 @@ server.listen(PORT, () => {
 
   ➜  접속 주소:      http://localhost:${PORT}/
   ➜  관리자 페이지:  http://localhost:${PORT}/admin
+  ➜  데이터베이스:    ${dbText}
   ➜  예매 상태:      ${statusText}
   ➜  회차별 좌석:    ${seatsInfo}
   ➜  관리자 기능:    ${adminText}
 `);
 });
-for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { server.close(() => { db.close(); process.exit(0); }); });
+
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => {
+    server.close(() => {
+      try { sqliteDb.close(); } catch (_) {}
+      process.exit(0);
+    });
+  });
+}

@@ -1,32 +1,34 @@
 # BUFFER 버퍼 티켓 예매
 
 공연 4회차(11.14 토 3PM·7PM, 11.15 일 3PM·7PM)의 자유석 예매 사이트입니다.
-Node 22.5 이상만 있으면 되고, 외부 패키지는 쓰지 않습니다(내장 SQLite).
+Node 22.5 이상에서 동작하며, Supabase 클라우드 데이터베이스(및 로컬 SQLite 폴백)를 지원합니다.
 
 ## 실행
 
 ```bash
-npm install              # 외부 패키지가 없어 사실상 no-op
-npm start                # http://localhost:3000 (기본값으로 바로 실행됨)
-```
-
-환경변수를 바꾸려면 `.env`를 만들어 불러옵니다(관리자 기능은 `ADMIN_TOKEN`이 있어야 켜집니다).
-
-```bash
-cp .env.example .env     # 값 수정 (ADMIN_TOKEN은 반드시 바꾸기)
-set -a; . ./.env; set +a
+npm install              # 의존성 설치 (@supabase/supabase-js)
+npm run dev              # 개발 서버 실행 (파일 감지 watch 모드, http://localhost:3000)
+# 또는 운영 실행
 npm start
 ```
 
-예매 흐름을 지금 바로 확인하려면 오픈 시각을 과거로 두고 실행하세요.
+환경변수는 `.env` 파일에서 자동으로 불러옵니다:
 
 ```bash
-OPEN_AT=2020-01-01T00:00:00Z TICKET_PRICE=15000 npm start
+cp .env.example .env     # 설정값 수정 (ADMIN_TOKEN, SUPABASE_URL, SUPABASE_KEY 등)
+npm run dev
 ```
 
 - 예매 페이지: `/`
-- 관리자 페이지: `/admin` (`ADMIN_TOKEN` 입력, 예매 목록·CSV·삭제)
-- 예매 데이터: `data/tickets.db` (이 파일만 백업하면 됩니다)
+- 관리자 페이지: `/admin` (`ADMIN_TOKEN` 입력, 예매 목록 실시간 검색/필터, CSV 내려받기, 삭제)
+- Supabase SQL 마이그레이션: `supabase-schema.sql` (Supabase Dashboard의 SQL Editor에서 복사하여 [Run] 실행)
+
+## Supabase 설정 방법
+
+1. [Supabase Dashboard](https://supabase.com/dashboard) 프로젝트 열기
+2. 좌측 메뉴 **SQL Editor**로 이동
+3. 프로젝트의 `supabase-schema.sql` 내용 전체를 복사하여 붙여넣고 **[Run]** 클릭
+4. `.env` 파일에 `SUPABASE_URL`과 `SUPABASE_KEY`가 올바르게 입력되었는지 확인 후 서버 재실행
 
 ## 기획서 반영 사항
 
@@ -37,19 +39,21 @@ OPEN_AT=2020-01-01T00:00:00Z TICKET_PRICE=15000 npm start
 | 좌석 | 자유석, 예매번호는 `BUF-회차-번호` (예: `BUF-B-07`). 좌석 방식은 화면에 노출하지 않음 |
 | 매수 | 1인 1매. **전화번호당 1건**으로 판정 (취소하면 다시 예매 가능). 매수 규칙은 화면에 노출하지 않음 |
 | 예매 흐름 | 예매하기 → **아카이빙·트리거 워닝 팝업** 확인 → 이름·전화번호 입력 → 예매 완료(예매번호). 결제 단계 없음 |
-| 동시 접속 | 한도 확인·좌석 배정·저장을 한 트랜잭션으로 처리. 45건 동시 예매 시 정확히 35건만 성공 |
+| 동시 접속 | Supabase RPC 원자적 트랜잭션 락(`pg_advisory_xact_lock`)으로 동시 요청 시 좌석 중복 및 정원 초과 원천 방지 |
 
 ## 설정 (환경변수)
 
 | 이름 | 기본값 | 설명 |
 | --- | --- | --- |
-| `PORT` | 3000 | 포트 |
+| `PORT` | 3000 | 서버 포트 |
 | `OPEN_AT` | 2026-11-04T20:00:00+09:00 | 예매 오픈 시각 |
 | `ADMIN_TOKEN` | (없음) | 비우면 관리자 기능이 꺼집니다 |
-| `DB_PATH` | ./data/tickets.db | DB 위치 |
-| `SEATS` | (전 회차 35) | 회차별 예매 좌석 수. 예: `A=35,B=30,C=35,D=28` (A=11.14 3PM, B=11.14 7PM, C=11.15 3PM, D=11.15 7PM). 빠진 회차는 35 |
+| `SUPABASE_URL` | https://qatrsegoqwandtsasunp.supabase.co | Supabase 프로젝트 URL |
+| `SUPABASE_KEY` | sb_publishable_... | Supabase Publishable / Anon / Service Key |
+| `DB_PATH` | ./data/tickets.db | SQLite 로컬 DB 위치 (Supabase 미연동 시 폴백) |
+| `SEATS` | (전 회차 35) | 회차별 예매 좌석 수. 예: `A=35,B=30,C=35,D=28` |
 | `BOOK_RATE_MAX` | 30 | IP당 10분간 예매 시도 한도 |
-| `TICKET_PRICE` | 0 | 결제 화면에 표시되는 금액(원). 0이면 "무료"로 표시. 실제 청구 없음 |
+| `TICKET_PRICE` | 0 | 결제 화면에 표시되는 금액(원). 0이면 "무료" |
 | `TRUST_PROXY` | 0 | 프록시 뒤에서 실행하면 1 (`X-Forwarded-For` 사용) |
 
 오픈 전에 흐름을 점검하려면 `OPEN_AT=2020-01-01T00:00:00Z`로 띄우고, 점검 뒤 `data/`를 지우세요.

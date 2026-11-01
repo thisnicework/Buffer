@@ -6,74 +6,363 @@
 <meta name="robots" content="noindex">
 <title>BUFFER 예매 관리</title>
 <link rel="preload" href="/fonts/SUIT-Variable.woff2" as="font" type="font/woff2" crossorigin>
-<style>@font-face{font-family:"SM KGothic";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SMKGothic-subset.woff2) format("woff2")}@font-face{font-family:"SM JGothic";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SMJGothic-subset.woff2) format("woff2")}body{word-spacing:-.15em}button,input{word-spacing:inherit}h1,th,button{font-family:"SM KGothic","SUIT Variable",sans-serif}@font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}</style>
 <style>
-:root{--paper:#EEF0F0;--ink:#0A0B0C;--mute:#5B6064;--line:#BFC3C6;--danger:#B3261E;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--paper:#0A0B0C;--ink:#ECEEEE;--mute:#9AA0A4;--line:#2B2F32;--danger:#FF6F66;color-scheme:dark}}
+@font-face{font-family:"SM KGothic";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SMKGothic-subset.woff2) format("woff2")}
+@font-face{font-family:"SM JGothic";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SMJGothic-subset.woff2) format("woff2")}
+@font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}
+body{word-spacing:-.15em}
+button,input{word-spacing:inherit}
+h1,th,button,.badge{font-family:"SM KGothic","SUIT Variable",sans-serif}
+</style>
+<style>
+:root{
+  --paper:#EEF0F0;
+  --ink:#0A0B0C;
+  --mute:#5B6064;
+  --line:#BFC3C6;
+  --danger:#B3261E;
+  --badge-bg:rgba(10,11,12,0.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#0A0B0C;
+    --ink:#ECEEEE;
+    --mute:#9AA0A4;
+    --line:#2B2F32;
+    --danger:#FF6F66;
+    --badge-bg:rgba(236,238,238,0.08);
+    color-scheme:dark;
+  }
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 "SM JGothic","SUIT Variable",-apple-system,BlinkMacSystemFont,system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;padding:24px max(16px,env(safe-area-inset-left,0px))}
-.wrap{max-width:960px;margin:0 auto}
-h1{font-size:22px;margin:0 0 4px}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font:15px/1.6 "SM JGothic","SUIT Variable",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  padding:28px max(20px,env(safe-area-inset-left,0px));
+}
+.wrap{max-width:1040px;margin:0 auto}
+.header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:8px}
+h1{font-size:24px;margin:0;letter-spacing:-0.02em}
 .mute{color:var(--mute);font-size:13px}
-form,.tools{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
-input{font:inherit;font-size:16px;color:var(--ink);background:transparent;border:1px solid var(--ink);padding:8px 10px;min-width:260px;border-radius:0}
-button{font:inherit;color:var(--ink);background:transparent;border:1px solid var(--ink);padding:8px 16px;cursor:pointer}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:var(--badge-bg);
+  border:1px solid var(--line);
+  color:var(--ink);
+}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot.green{background:#10B981}
+.dot.gray{background:var(--mute)}
+
+form#auth{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}
+input{
+  font:inherit;
+  font-size:15px;
+  color:var(--ink);
+  background:transparent;
+  border:1px solid var(--ink);
+  padding:8px 12px;
+  border-radius:0;
+}
+input:focus{outline:2px solid var(--ink)}
+button{
+  font:inherit;
+  color:var(--ink);
+  background:transparent;
+  border:1px solid var(--ink);
+  padding:8px 16px;
+  cursor:pointer;
+  transition:background 0.15s, color 0.15s;
+}
 button:hover{background:var(--ink);color:var(--paper)}
-.tablewrap{overflow-x:auto;border-top:1px solid var(--ink)}
-table{border-collapse:collapse;width:100%;min-width:640px;font-variant-numeric:tabular-nums}
-th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-size:14px}
-th{font-size:12px;color:var(--mute);font-weight:500}
-.del{border:0;color:var(--danger);text-decoration:underline;padding:0}
-.del:hover{background:none;color:var(--danger)}
-.sum{display:flex;gap:24px;flex-wrap:wrap;margin:12px 0}
-.err{color:var(--danger);min-height:1.4em}
+button.active{background:var(--ink);color:var(--paper)}
+
+.controls{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+  flex-wrap:wrap;
+  margin:20px 0 12px;
+}
+.filter-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.filter-btn{font-size:13px;padding:6px 12px}
+.search-input{min-width:240px;flex:1;max-width:320px}
+
+.sum{
+  display:flex;
+  gap:16px;
+  flex-wrap:wrap;
+  margin:12px 0 20px;
+  padding:12px 14px;
+  background:var(--badge-bg);
+  border:1px solid var(--line);
+  font-size:13px;
+}
+.sum span{display:inline-flex;align-items:center;gap:4px}
+.sum strong{font-weight:700}
+
+.tools{display:flex;gap:10px;flex-wrap:wrap}
+.tablewrap{overflow-x:auto;border-top:1px solid var(--ink);margin-top:16px}
+table{border-collapse:collapse;width:100%;min-width:680px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-size:14px}
+th{font-size:12px;color:var(--mute);font-weight:600;letter-spacing:0.04em}
+.del{
+  border:0;
+  color:var(--danger);
+  text-decoration:underline;
+  padding:0;
+  background:none;
+  cursor:pointer;
+  font-size:13px;
+}
+.del:hover{background:none;color:var(--danger);font-weight:700}
+.empty-msg{padding:40px;text-align:center;color:var(--mute);font-size:14px}
+.err{color:var(--danger);min-height:1.4em;margin-top:8px;font-size:14px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>BUFFER 버퍼 · 예매 관리</h1>
-  <div class="mute">관리자 토큰으로만 열립니다. 토큰은 이 탭이 열려 있는 동안만 기억됩니다.</div>
-  <form id="auth"><input id="token" type="password" placeholder="관리자 토큰" autocomplete="off"><button type="submit">불러오기</button></form>
+  <div class="header">
+    <div>
+      <h1>BUFFER 버퍼 · 예매 관리</h1>
+      <div class="mute">관리자 토큰으로 인증되며, 브라우저 세션에 안전하게 유지됩니다.</div>
+    </div>
+    <div id="db-badge" class="badge" style="display:none">
+      <span class="dot green"></span>
+      <span id="db-text">Supabase Cloud</span>
+    </div>
+  </div>
+
+  <form id="auth">
+    <input id="token" type="password" placeholder="관리자 토큰 입력" autocomplete="off">
+    <button type="submit">불러오기</button>
+  </form>
   <div class="err" id="err" role="alert"></div>
+
   <div id="out" hidden>
     <div class="sum" id="sum"></div>
-    <div class="tools"><button id="csv" type="button">CSV 내려받기</button><button id="reload" type="button">새로고침</button></div>
-    <div class="tablewrap"><table><thead><tr><th>회차</th><th>예매번호</th><th>이름</th><th>전화번호</th><th>예매시각</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+
+    <div class="controls">
+      <div class="filter-tabs" id="filters">
+        <button type="button" class="filter-btn active" data-show="ALL">전체 보기</button>
+        <button type="button" class="filter-btn" data-show="A">A (11.14 토 3PM)</button>
+        <button type="button" class="filter-btn" data-show="B">B (11.14 토 7PM)</button>
+        <button type="button" class="filter-btn" data-show="C">C (11.15 일 3PM)</button>
+        <button type="button" class="filter-btn" data-show="D">D (11.15 일 7PM)</button>
+      </div>
+      <div class="tools">
+        <input id="search" class="search-input" type="search" placeholder="이름 / 전화번호 / 번호 검색..." autocomplete="off">
+        <button id="csv" type="button">CSV 내려받기</button>
+        <button id="reload" type="button">새로고침</button>
+      </div>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>회차</th>
+            <th>예매번호</th>
+            <th>이름</th>
+            <th>전화번호</th>
+            <th>예매시각</th>
+            <th>관리</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty-msg" style="display:none">예매 내역이 없습니다.</div>
+    </div>
   </div>
 </div>
+
 <script>
 (function(){
-  var NAMES={A:"11.14 토 3PM",B:"11.14 토 7PM",C:"11.15 일 3PM",D:"11.15 일 7PM"};
-  var token=""; try{token=sessionStorage.getItem("buf-admin")||""}catch(e){}
-  var armed=null;
-  function $(i){return document.getElementById(i)}
-  function td(t){var c=document.createElement("td");c.textContent=t;return c}
-  async function load(){
-    $("err").textContent="";
-    var r=await fetch("/api/admin/reservations",{headers:{Authorization:"Bearer "+token},cache:"no-store"});
-    if(r.status===401){$("out").hidden=true;$("err").textContent="토큰이 올바르지 않거나 서버에 관리자 토큰이 설정되어 있지 않습니다.";return}
-    var d=await r.json(), rows=d.reservations; $("out").hidden=false;
-    var cnt={A:0,B:0,C:0,D:0}; rows.forEach(function(x){cnt[x.show]++});
-    $("sum").textContent=""; Object.keys(NAMES).forEach(function(k){var s=document.createElement("span");s.textContent=NAMES[k]+" : "+cnt[k]+" / "+((d.seats&&d.seats[k])||35);$("sum").appendChild(s)});
-    var tb=$("rows"); tb.textContent="";
-    rows.forEach(function(x){
-      var tr=document.createElement("tr");
-      tr.appendChild(td(NAMES[x.show])); tr.appendChild(td(x.code)); tr.appendChild(td(x.name)); tr.appendChild(td(x.phone)); tr.appendChild(td(new Date(x.createdAt).toLocaleString("ko-KR")));
-      var c=document.createElement("td"), b=document.createElement("button"); b.className="del"; b.type="button"; b.textContent=armed===x.code?"한 번 더 누르면 삭제":"삭제";
-      b.addEventListener("click",async function(){
-        if(armed!==x.code){armed=x.code;load();return}
-        await fetch("/api/admin/reservations/"+x.code,{method:"DELETE",headers:{Authorization:"Bearer "+token}}); armed=null; load();
+  var NAMES = {
+    A: "11.14 토 3PM",
+    B: "11.14 토 7PM",
+    C: "11.15 일 3PM",
+    D: "11.15 일 7PM"
+  };
+  var token = "";
+  try { token = sessionStorage.getItem("buf-admin") || ""; } catch(e){}
+  var armed = null;
+  var allRows = [];
+  var currentSeats = { A: 35, B: 35, C: 35, D: 35 };
+  var activeShowFilter = "ALL";
+  var searchQuery = "";
+
+  function $(id){ return document.getElementById(id); }
+  function td(text){ var c = document.createElement("td"); c.textContent = text; return c; }
+
+  function renderTable() {
+    var filtered = allRows.filter(function(r){
+      if (activeShowFilter !== "ALL" && r.show !== activeShowFilter) return false;
+      if (searchQuery) {
+        var q = searchQuery.toLowerCase();
+        var matchName = r.name && r.name.toLowerCase().indexOf(q) !== -1;
+        var matchPhone = r.phone && (r.phone.indexOf(q) !== -1 || r.phone.replace(/\D/g, "").indexOf(q) !== -1);
+        var matchCode = r.code && r.code.toLowerCase().indexOf(q) !== -1;
+        if (!matchName && !matchPhone && !matchCode) return false;
+      }
+      return true;
+    });
+
+    var tb = $("rows");
+    tb.textContent = "";
+
+    if (filtered.length === 0) {
+      $("empty").style.display = "block";
+    } else {
+      $("empty").style.display = "none";
+      filtered.forEach(function(x){
+        var tr = document.createElement("tr");
+        tr.appendChild(td(NAMES[x.show] || x.show));
+        tr.appendChild(td(x.code));
+        tr.appendChild(td(x.name));
+        tr.appendChild(td(x.phone));
+        tr.appendChild(td(new Date(x.createdAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })));
+
+        var c = document.createElement("td");
+        var b = document.createElement("button");
+        b.className = "del";
+        b.type = "button";
+        b.textContent = armed === x.code ? "한 번 더 누르면 삭제" : "삭제";
+        b.addEventListener("click", async function(){
+          if (armed !== x.code) {
+            armed = x.code;
+            renderTable();
+            return;
+          }
+          await fetch("/api/admin/reservations/" + encodeURIComponent(x.code), {
+            method: "DELETE",
+            headers: { Authorization: "Bearer " + token }
+          });
+          armed = null;
+          load();
+        });
+        c.appendChild(b);
+        tr.appendChild(c);
+        tb.appendChild(tr);
       });
-      c.appendChild(b); tr.appendChild(c); tb.appendChild(tr);
+    }
+  }
+
+  function updateSummary() {
+    var cnt = { A: 0, B: 0, C: 0, D: 0 };
+    allRows.forEach(function(x){ if (cnt[x.show] !== undefined) cnt[x.show]++; });
+
+    var sumEl = $("sum");
+    sumEl.textContent = "";
+
+    var totalSpan = document.createElement("span");
+    totalSpan.innerHTML = "총 예매 <strong>" + allRows.length + "</strong>건";
+    sumEl.appendChild(totalSpan);
+
+    Object.keys(NAMES).forEach(function(k){
+      var s = document.createElement("span");
+      var cap = (currentSeats && currentSeats[k]) || 35;
+      s.innerHTML = NAMES[k] + " : <strong>" + cnt[k] + "</strong> / " + cap + "석";
+      sumEl.appendChild(s);
     });
   }
-  $("auth").addEventListener("submit",function(e){e.preventDefault();token=$("token").value.trim();try{sessionStorage.setItem("buf-admin",token)}catch(x){} load()});
-  $("reload").addEventListener("click",load);
-  $("csv").addEventListener("click",async function(){
-    var r=await fetch("/api/admin/reservations?format=csv",{headers:{Authorization:"Bearer "+token}}); if(!r.ok)return;
-    var u=URL.createObjectURL(await r.blob()), a=document.createElement("a"); a.href=u; a.download="buffer-reservations.csv"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(u)},1000);
+
+  async function load(){
+    $("err").textContent = "";
+    try {
+      var r = await fetch("/api/admin/reservations", {
+        headers: { Authorization: "Bearer " + token },
+        cache: "no-store"
+      });
+      if (r.status === 401) {
+        $("out").hidden = true;
+        $("err").textContent = "토큰이 올바르지 않거나 서버에 관리자 토큰(ADMIN_TOKEN)이 설정되어 있지 않습니다.";
+        return;
+      }
+      if (!r.ok) {
+        $("err").textContent = "예매 목록을 불러오지 못했습니다. (HTTP " + r.status + ")";
+        return;
+      }
+      var d = await r.json();
+      allRows = d.reservations || [];
+      currentSeats = d.seats || currentSeats;
+      $("out").hidden = false;
+
+      // DB 뱃지 표시
+      var badge = $("db-badge");
+      var text = $("db-text");
+      badge.style.display = "inline-flex";
+      if (d.db === "supabase") {
+        text.textContent = "Supabase Cloud 연동됨";
+      } else {
+        text.textContent = "SQLite 로컬 DB";
+      }
+
+      updateSummary();
+      renderTable();
+    } catch (err) {
+      $("err").textContent = "서버 통신 중 오류가 발생했습니다: " + err.message;
+    }
+  }
+
+  // 필터 탭 이벤트
+  $("filters").addEventListener("click", function(e){
+    if (e.target && e.target.classList.contains("filter-btn")) {
+      document.querySelectorAll(".filter-btn").forEach(function(b){ b.classList.remove("active"); });
+      e.target.classList.add("active");
+      activeShowFilter = e.target.getAttribute("data-show");
+      renderTable();
+    }
   });
-  if(token) load();
+
+  // 검색 인풋 이벤트
+  $("search").addEventListener("input", function(e){
+    searchQuery = e.target.value.trim();
+    renderTable();
+  });
+
+  $("auth").addEventListener("submit", function(e){
+    e.preventDefault();
+    token = $("token").value.trim();
+    try { sessionStorage.setItem("buf-admin", token); } catch(x){}
+    load();
+  });
+
+  $("reload").addEventListener("click", load);
+
+  $("csv").addEventListener("click", async function(){
+    try {
+      var r = await fetch("/api/admin/reservations?format=csv", {
+        headers: { Authorization: "Bearer " + token }
+      });
+      if (!r.ok) return;
+      var blob = await r.blob();
+      var u = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = u;
+      a.download = "buffer-reservations-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(u); }, 1000);
+    } catch(e) {
+      alert("CSV 다운로드 중 오류가 발생했습니다.");
+    }
+  });
+
+  if (token) {
+    $("token").value = token;
+    load();
+  }
 })();
 </script>
 </body>
