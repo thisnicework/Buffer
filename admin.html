@@ -47,6 +47,7 @@ body{
 .header{margin-bottom:8px}
 
 form#auth{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}
+form#auth[hidden]{display:none !important}
 input{
   font:inherit;
   font-size:15px;
@@ -140,6 +141,7 @@ th{font-size:12px;color:var(--mute);font-weight:600;letter-spacing:0.04em}
         <input id="search" class="search-input" type="search" placeholder="이름 / 전화번호 / 번호 검색..." autocomplete="off">
         <button id="csv" type="button">CSV 내려받기</button>
         <button id="reload" type="button">새로고침</button>
+        <button id="logout" type="button">로그아웃</button>
       </div>
     </div>
 
@@ -262,7 +264,8 @@ th{font-size:12px;color:var(--mute);font-weight:600;letter-spacing:0.04em}
       });
       if (r.status === 401) {
         $("out").hidden = true;
-        $("err").textContent = "토큰이 올바르지 않거나 서버에 관리자 토큰(ADMIN_TOKEN)이 설정되어 있지 않습니다.";
+        $("auth").hidden = false;
+        $("err").textContent = "관리자 암호가 올바르지 않습니다.";
         return;
       }
       if (!r.ok) {
@@ -272,6 +275,7 @@ th{font-size:12px;color:var(--mute);font-weight:600;letter-spacing:0.04em}
       var d = await r.json();
       allRows = d.reservations || [];
       currentSeats = d.seats || currentSeats;
+      $("auth").hidden = true;
       $("out").hidden = false;
 
       updateSummary();
@@ -305,6 +309,15 @@ th{font-size:12px;color:var(--mute);font-weight:600;letter-spacing:0.04em}
   });
 
   $("reload").addEventListener("click", load);
+
+  $("logout").addEventListener("click", function(){
+    token = "";
+    try { sessionStorage.removeItem("buf-admin"); } catch(e){}
+    $("token").value = "";
+    $("out").hidden = true;
+    $("auth").hidden = false;
+    $("err").textContent = "";
+  });
 
   $("csv").addEventListener("click", async function(){
     try {
