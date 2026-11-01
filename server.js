@@ -13,7 +13,7 @@ if (typeof process.loadEnvFile === "function") {
 
 const PORT = Number(process.env.PORT || 3000);
 const OPEN_AT = new Date(process.env.OPEN_AT || "2026-11-04T20:00:00+09:00").getTime();
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "admin1234";
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "tickets.db");
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 const BOOK_RATE_MAX = Number(process.env.BOOK_RATE_MAX || 30); // IP당 10분 내 예매 시도 한도 (공용 와이파이를 고려해 넉넉히)
