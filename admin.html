@@ -44,23 +44,7 @@ body{
   padding:28px max(20px,env(safe-area-inset-left,0px));
 }
 .wrap{max-width:1040px;margin:0 auto}
-.header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:8px}
-h1{font-size:24px;margin:0;letter-spacing:-0.02em}
-.mute{color:var(--mute);font-size:13px}
-.badge{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  font-size:12px;
-  padding:4px 10px;
-  border-radius:999px;
-  background:var(--badge-bg);
-  border:1px solid var(--line);
-  color:var(--ink);
-}
-.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-.dot.green{background:#10B981}
-.dot.gray{background:var(--mute)}
+.header{margin-bottom:8px}
 
 form#auth{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}
 input{
@@ -132,14 +116,8 @@ th{font-size:12px;color:var(--mute);font-weight:600;letter-spacing:0.04em}
 <body>
 <div class="wrap">
   <div class="header">
-    <div>
-      <h1>BUFFER 버퍼 · 예매 관리</h1>
-      <div class="mute">관리자 토큰으로 인증되며, 브라우저 세션에 안전하게 유지됩니다.</div>
-    </div>
-    <div id="db-badge" class="badge" style="display:none">
-      <span class="dot green"></span>
-      <span id="db-text">Supabase Cloud</span>
-    </div>
+    <h1>BUFFER 버퍼 · 예매 관리</h1>
+    <div class="mute">관리자 토큰으로 인증되며, 브라우저 세션에 안전하게 유지됩니다.</div>
   </div>
 
   <form id="auth">
@@ -296,16 +274,6 @@ th{font-size:12px;color:var(--mute);font-weight:600;letter-spacing:0.04em}
       allRows = d.reservations || [];
       currentSeats = d.seats || currentSeats;
       $("out").hidden = false;
-
-      // DB 뱃지 표시
-      var badge = $("db-badge");
-      var text = $("db-text");
-      badge.style.display = "inline-flex";
-      if (d.db === "supabase") {
-        text.textContent = "Supabase Cloud 연동됨";
-      } else {
-        text.textContent = "SQLite 로컬 DB";
-      }
 
       updateSummary();
       renderTable();
