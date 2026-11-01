@@ -2,7 +2,7 @@
   "use strict";
   var state = { price: 0, shows: [], openAt: 0, offset: 0, loaded: false, failed: false };
   var mine = null; // {code, show, name, phone}
-  var confirmCancel = false, cancelBusy = false, lookupErr = "", lookupBusy = false;
+  var lookupErr = "", lookupBusy = false;
   var dlg = null, lastFocus = null;
   var STORE = "buffer-ticket";
 
@@ -302,7 +302,7 @@
     var z = $("mineZone"), box = $("mine"); z.hidden = false; box.textContent = "";
     if (!mine) {
       // 안내 문구는 입력칸 폭(420px)에 묶이지 않게 폼 밖에 두어 한 줄로
-      var note = el("p", "notice", "이미 예매하셨다면 이름과 전화번호로 내역을 확인하거나 취소할 수 있습니다.");
+      var note = el("p", "notice", "이미 예매하셨다면 이름과 전화번호로 예매 내역을 확인할 수 있습니다. 예매 취소는 인스타그램 문의로만 가능합니다.");
       note.style.maxWidth = "none"; note.style.marginTop = "0"; box.appendChild(note);
       var f = el("form"); f.style.maxWidth = "420px"; f.noValidate = true;
       function field(id, lab, ph, mode) { var l = el("label", "field"); l.htmlFor = id; l.appendChild(el("span", null, lab)); var i = el("input"); i.id = id; i.type = "text"; i.placeholder = ph; if (mode) i.inputMode = mode; l.appendChild(i); f.appendChild(l); return i; }
@@ -335,29 +335,40 @@
     meta.appendChild(el("span", null, s.date + " (" + s.dowKo + "요일) " + s.time));
     meta.appendChild(el("span", null, mine.name + " · " + maskPhone(mine.phone)));
     a.appendChild(meta);
-    if (!confirmCancel) {
-      var cb = el("button", "link warn", "예매 취소"); cb.type = "button";
-      cb.addEventListener("click", function () { confirmCancel = true; renderMine(); });
-      side.appendChild(cb);
-    } else {
-      side.appendChild(el("span", null, "예매를 취소할까요? 취소하면 자리가 반환됩니다."));
-      var y = el("button", "btn solid", cancelBusy ? "처리 중" : "취소 확정"); y.type = "button"; y.disabled = cancelBusy;
-      y.addEventListener("click", cancelBooking);
-      var n = el("button", "link", "돌아가기"); n.type = "button"; n.disabled = cancelBusy;
-      n.addEventListener("click", function () { confirmCancel = false; renderMine(); });
-      side.appendChild(y); side.appendChild(n);
-    }
-    stub.appendChild(a); stub.appendChild(side); box.appendChild(stub);
-  }
 
-  async function cancelBooking() {
-    if (!mine || cancelBusy) return;
-    cancelBusy = true; renderMine();
-    try {
-      await post("/api/cancel", { name: mine.name, phone: mine.phone, code: mine.code });
-      mine = null; saveMine(); confirmCancel = false; say("예매가 취소되었습니다.");
-    } catch (e) { say("취소하지 못했습니다. 잠시 후 다시 시도해주세요."); }
-    cancelBusy = false; await refresh();
+    var cancelTitle = el("span", null, "예매 취소 안내");
+    cancelTitle.style.fontWeight = "600";
+    cancelTitle.style.fontSize = "13px";
+    side.appendChild(cancelTitle);
+
+    var cancelDesc = el("span", null, "취소는 인스타그램 DM으로 문의 바랍니다.");
+    cancelDesc.style.color = "var(--mute)";
+    cancelDesc.style.fontSize = "12px";
+    cancelDesc.style.lineHeight = "1.4";
+    side.appendChild(cancelDesc);
+
+    var ig = el("a", "btn", "인스타그램 문의 ↗");
+    ig.href = "https://www.instagram.com/sfumato.kr/";
+    ig.target = "_blank";
+    ig.rel = "noopener";
+    ig.setAttribute("aria-label", "인스타그램에서 예매 취소 문의하기 (새 창)");
+    ig.style.textAlign = "center";
+    ig.style.textDecoration = "none";
+    ig.style.display = "inline-block";
+    ig.style.padding = "8px 12px";
+    ig.style.fontSize = "12px";
+    ig.style.minWidth = "0";
+    side.appendChild(ig);
+
+    var closeMine = el("button", "link", "내역 닫기");
+    closeMine.type = "button";
+    closeMine.style.marginTop = "6px";
+    closeMine.style.fontSize = "12px";
+    closeMine.style.cursor = "pointer";
+    closeMine.addEventListener("click", function () { mine = null; saveMine(); renderMine(); });
+    side.appendChild(closeMine);
+
+    stub.appendChild(a); stub.appendChild(side); box.appendChild(stub);
   }
 
   /* ---- dialog ---- */
@@ -438,7 +449,7 @@
       metaBox.appendChild(el("p", null, dlg.name + " 님 (" + maskPhone(dlg.phone) + ")"));
       metaBox.appendChild(el("p", null, "정상적으로 예매가 완료되었습니다."));
       box.appendChild(metaBox);
-      box.appendChild(el("p", null, "예매 내역 확인이나 취소는 이름과 전화번호로 언제든 가능합니다."));
+      box.appendChild(el("p", null, "예매 내역 확인은 이름과 전화번호로 언제든 가능하며, 예매 취소는 인스타그램 문의로 가능합니다."));
       var act3 = el("div", "actions"); var done = el("button", "btn solid", "확인"); done.type = "button"; done.addEventListener("click", closeDlg);
       act3.appendChild(done); box.appendChild(act3); focusEl = done;
     }
