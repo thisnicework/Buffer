@@ -118,7 +118,16 @@ async function handler(req, res) {
     for (const r of rows || []) {
       if (counts[r.show_id] !== undefined) counts[r.show_id]++;
     }
-    const shows = SHOWS.map((s) => ({ ...s, soldOut: (counts[s.id] || 0) >= SEATS[s.id] }));
+    const shows = SHOWS.map((s) => {
+      const cap = SEATS[s.id];
+      const count = counts[s.id] || 0;
+      return {
+        ...s,
+        capacity: cap,
+        remaining: Math.max(0, cap - count),
+        soldOut: count >= cap,
+      };
+    });
     const serverNow = Date.now();
     return send(res, 200, {
       openAt: new Date(OPEN_AT).toISOString(),

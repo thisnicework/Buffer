@@ -129,7 +129,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 /* shows */
 .shows{display:flex;flex-direction:column;margin-top:18px;border-top:1px solid var(--line)}
-.row{display:grid;grid-template-columns:8.5rem 1fr auto;align-items:center;gap:14px 24px;padding-block:20px;border-bottom:1px solid var(--line)}
+.row{display:grid;grid-template-columns:8.5rem 6rem 1fr auto;align-items:center;gap:14px 24px;padding-block:20px;border-bottom:1px solid var(--line)}
 .date{font-family:var(--f-display);font-weight:800;font-size:34px;line-height:1;letter-spacing:-.03em}
 .date small{display:block;margin-top:6px;font-family:var(--f-mono);font-weight:400;font-size:11px;letter-spacing:.05em;color:var(--mute)}
 .time{font-family:var(--f-mono);font-size:20px;font-weight:500}
@@ -137,16 +137,16 @@ button{font:inherit;color:inherit;cursor:pointer}
 .dots{display:grid;grid-template-columns:repeat(7,9px);gap:6px}
 .dots span{width:9px;height:9px;border-radius:50%;box-shadow:inset 0 0 0 1px var(--ring)}
 .dots span.t{background:var(--ink);box-shadow:none}
-.rem{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums;line-height:1.5}
-.rem b{display:block;font-size:26px;font-weight:500;letter-spacing:-.02em}
+.rem{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums;line-height:1.25}
+.rem b{display:block;font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1;margin-bottom:4px}
 .btn{border:1px solid var(--ink);background:transparent;padding:12px 22px;font-family:var(--f-mono);font-size:13px;letter-spacing:.02em;min-width:9.5rem}
 .btn:hover:not(:disabled){background:var(--ink);color:var(--paper)}
 .btn.solid{background:var(--ink);color:var(--paper)}
 .btn.solid:hover:not(:disabled){background:transparent;color:var(--ink)}
 .btn:disabled{border-color:var(--line);color:var(--mute);cursor:not-allowed}
 @media (max-width:720px){
-  .row{grid-template-columns:1fr auto;grid-template-areas:"d t" "b b"}
-  .row .date{grid-area:d}.row .time{grid-area:t;text-align:right}.row .btn{grid-area:b;width:100%}
+  .row{grid-template-columns:1fr auto;grid-template-areas:"d t" "a a" "b b";gap:14px}
+  .row .date{grid-area:d}.row .time{grid-area:t;text-align:right}.row .avail{grid-area:a}.row .btn{grid-area:b;width:100%}
 }
 
 /* info */

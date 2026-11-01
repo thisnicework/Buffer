@@ -262,7 +262,7 @@
     if (!state.loaded) return { label: "불러오는 중", off: true };
     if (mine) return { label: mine.show === s.id ? "예매 완료" : "이미 예매함", off: true };
     if (!isOpen()) return { label: formatOpenLabel(state.openAt), off: true };
-    if (s.soldOut) return { label: "매진", off: true };
+    if (s.soldOut || (typeof s.remaining === "number" && s.remaining <= 0)) return { label: "매진", off: true };
     return { label: "예매하기", off: false };
   }
   function render() {
@@ -271,17 +271,28 @@
     bn.textContent = state.failed ? "서버에 연결하지 못했습니다. 잠시 후 자동으로 다시 시도합니다." : "";
     var box = $("shows"); box.textContent = "";
     var list = state.shows.length ? state.shows : [
-      { id: "A", date: "11.14", dow: "SAT", dowKo: "토", time: "3PM" }, { id: "B", date: "11.14", dow: "SAT", dowKo: "토", time: "7PM" },
-      { id: "C", date: "11.15", dow: "SUN", dowKo: "일", time: "3PM" }, { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM" }];
+      { id: "A", date: "11.14", dow: "SAT", dowKo: "토", time: "3PM", remaining: 35, capacity: 35 },
+      { id: "B", date: "11.14", dow: "SAT", dowKo: "토", time: "7PM", remaining: 35, capacity: 35 },
+      { id: "C", date: "11.15", dow: "SUN", dowKo: "일", time: "3PM", remaining: 35, capacity: 35 },
+      { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM", remaining: 35, capacity: 35 }];
     list.forEach(function (s) {
+      var cap = typeof s.capacity === "number" ? s.capacity : 35;
+      var remNum = typeof s.remaining === "number" ? s.remaining : (s.soldOut ? 0 : cap);
       var row = el("div", "row");
       var date = el("div", "date", s.date); date.appendChild(el("small", null, s.dow + " · " + s.dowKo + "요일"));
       var time = el("div", "time", s.time);
+      var av = el("div", "avail"), dots = el("div", "dots"); dots.setAttribute("aria-hidden", "true");
+      var tk = Math.max(0, cap - remNum);
+      for (var i = 0; i < cap; i++) dots.appendChild(el("span", i < tk ? "t" : ""));
+      var rem = el("div", "rem");
+      rem.appendChild(el("b", null, state.loaded ? String(remNum) : "–"));
+      rem.appendChild(document.createTextNode("/ " + cap + " 잔여"));
+      av.appendChild(dots); av.appendChild(rem);
       var st = btnState(s);
       var btn = el("button", "btn" + (st.off ? "" : " solid"), st.label); btn.type = "button"; btn.disabled = st.off;
       btn.setAttribute("aria-label", s.date + " " + s.dowKo + "요일 " + s.time + " " + st.label);
       btn.addEventListener("click", function () { openDialog(s); });
-      row.appendChild(date); row.appendChild(time); row.appendChild(btn);
+      row.appendChild(date); row.appendChild(time); row.appendChild(av); row.appendChild(btn);
       box.appendChild(row);
     });
     renderMine();
