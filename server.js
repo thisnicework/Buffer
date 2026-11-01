@@ -11,8 +11,16 @@ if (typeof process.loadEnvFile === "function") {
   try { process.loadEnvFile(); } catch (e) { if (e && e.code !== "ENOENT") throw e; }
 }
 
+function parseOpenAt(v) {
+  const str = String(v || "2026-11-04T20:00:00+09:00").trim();
+  const hasTz = /([+-]\d{2}:?\d{2}|Z)$/i.test(str);
+  const normalized = hasTz ? str : str.replace(" ", "T") + "+09:00";
+  const t = new Date(normalized).getTime();
+  return Number.isFinite(t) ? t : new Date("2026-11-04T20:00:00+09:00").getTime();
+}
+
 const PORT = Number(process.env.PORT || 3000);
-const OPEN_AT = new Date(process.env.OPEN_AT || "2026-11-04T20:00:00+09:00").getTime();
+const OPEN_AT = parseOpenAt(process.env.OPEN_AT);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "tickets.db");
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
@@ -364,10 +372,13 @@ async function api(req, res, url) {
 
   if (route === "GET /api/shows") {
     const shows = await showsPublic();
+    const serverNow = Date.now();
     return send(res, 200, {
       openAt: new Date(OPEN_AT).toISOString(),
-      now: new Date().toISOString(),
-      open: isOpen(),
+      openAtMs: OPEN_AT,
+      now: new Date(serverNow).toISOString(),
+      nowMs: serverNow,
+      open: serverNow >= OPEN_AT,
       price: TICKET_PRICE,
       shows,
     });
@@ -389,6 +400,7 @@ async function api(req, res, url) {
     const r = await dbBook(b.show, name, phone);
     if (r.error === "duplicate") return send(res, 409, { error: "duplicate", message: "이 전화번호로 이미 예매하셨습니다." });
     if (r.error === "soldout") return send(res, 409, { error: "soldout", message: "이 회차는 매진되었습니다. 다른 회차를 선택해주세요." });
+    if (r.error === "seat_conflict") return send(res, 409, { error: "soldout", message: "선택하신 좌석이 마감되었습니다. 다시 시도해주세요." });
     return send(res, 201, { code: r.code, show: b.show });
   }
 

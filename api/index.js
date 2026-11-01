@@ -3,7 +3,15 @@
 const crypto = require("node:crypto");
 const { createClient } = require("@supabase/supabase-js");
 
-const OPEN_AT = new Date(process.env.OPEN_AT || "2026-11-04T20:00:00+09:00").getTime();
+function parseOpenAt(v) {
+  const str = String(v || "2026-11-04T20:00:00+09:00").trim();
+  const hasTz = /([+-]\d{2}:?\d{2}|Z)$/i.test(str);
+  const normalized = hasTz ? str : str.replace(" ", "T") + "+09:00";
+  const t = new Date(normalized).getTime();
+  return Number.isFinite(t) ? t : new Date("2026-11-04T20:00:00+09:00").getTime();
+}
+
+const OPEN_AT = parseOpenAt(process.env.OPEN_AT);
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "admin1234";
 const TICKET_PRICE = Number(process.env.TICKET_PRICE || 0);
 const CAP = 35;
@@ -111,10 +119,13 @@ async function handler(req, res) {
       if (counts[r.show_id] !== undefined) counts[r.show_id]++;
     }
     const shows = SHOWS.map((s) => ({ ...s, soldOut: (counts[s.id] || 0) >= SEATS[s.id] }));
+    const serverNow = Date.now();
     return send(res, 200, {
       openAt: new Date(OPEN_AT).toISOString(),
-      now: new Date().toISOString(),
-      open: isOpen(),
+      openAtMs: OPEN_AT,
+      now: new Date(serverNow).toISOString(),
+      nowMs: serverNow,
+      open: serverNow >= OPEN_AT,
       price: TICKET_PRICE,
       shows,
     });
@@ -131,17 +142,20 @@ async function handler(req, res) {
     const phone = normalizePhone(b.phone);
     if (!phone) return send(res, 400, { error: "phone", message: "휴대전화 번호를 010-0000-0000 형식으로 입력해주세요." });
 
+    const maxCap = SEATS[b.show] || CAP;
+
     // Supabase RPC book_ticket 호출 (분산 락 보장)
     const { data: rpcRes, error: rpcErr } = await supabase.rpc("book_ticket", {
       p_show_id: b.show,
       p_name: name,
       p_phone: phone,
-      p_cap: SEATS[b.show] || CAP,
+      p_cap: maxCap,
     });
 
     if (!rpcErr && rpcRes) {
       if (rpcRes.error === "duplicate") return send(res, 409, { error: "duplicate", message: "이 전화번호로 이미 예매하셨습니다." });
       if (rpcRes.error === "soldout") return send(res, 409, { error: "soldout", message: "이 회차는 매진되었습니다. 다른 회차를 선택해주세요." });
+      if (rpcRes.error === "seat_conflict") return send(res, 409, { error: "soldout", message: "선택하신 좌석이 마감되었습니다. 다시 시도해주세요." });
       return send(res, 201, { code: rpcRes.code, show: b.show });
     }
 
@@ -150,13 +164,16 @@ async function handler(req, res) {
     if (dup) return send(res, 409, { error: "duplicate", message: "이 전화번호로 이미 예매하셨습니다." });
 
     const { data: showRows } = await supabase.from("reservations").select("seat").eq("show_id", b.show).order("seat");
-    if ((showRows || []).length >= (SEATS[b.show] || CAP)) {
+    if ((showRows || []).length >= maxCap) {
       return send(res, 409, { error: "soldout", message: "이 회차는 매진되었습니다. 다른 회차를 선택해주세요." });
     }
 
     const used = new Set((showRows || []).map((x) => x.seat));
     let seat = 1;
     while (used.has(seat)) seat++;
+    if (seat > maxCap) {
+      return send(res, 409, { error: "soldout", message: "이 회차는 매진되었습니다. 다른 회차를 선택해주세요." });
+    }
     const code = `BUF-${b.show}-${pad(seat)}`;
 
     const { error: insErr } = await supabase.from("reservations").insert({
@@ -169,7 +186,13 @@ async function handler(req, res) {
     });
 
     if (insErr) {
-      if (insErr.code === "23505") return send(res, 409, { error: "duplicate", message: "이 전화번호로 이미 예매하셨습니다." });
+      if (insErr.code === "23505") {
+        const msg = String(insErr.message || "").toLowerCase();
+        if (msg.includes("uq_show_seat") || msg.includes("seat")) {
+          return send(res, 409, { error: "soldout", message: "선택하신 좌석이 마감되었습니다. 다시 시도해주세요." });
+        }
+        return send(res, 409, { error: "duplicate", message: "이 전화번호로 이미 예매하셨습니다." });
+      }
       console.error(insErr);
       return send(res, 500, { error: "server", message: "예매 처리 중 오류가 발생했습니다." });
     }

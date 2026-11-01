@@ -204,6 +204,17 @@
 
   /* ---- countdown ---- */
   var wasOpen = false;
+  function formatOpenLabel(ts) {
+    if (!ts) return "오픈 전";
+    var d = new Date(ts);
+    var kst = new Date(d.getTime() + 9 * 3600000);
+    var m = pad(kst.getUTCMonth() + 1);
+    var day = pad(kst.getUTCDate());
+    var h = pad(kst.getUTCHours());
+    var min = pad(kst.getUTCMinutes());
+    return m + "." + day + " " + h + ":" + min + " 오픈";
+  }
+
   function tick() {
     var big = $("big"), pill = $("pill");
     if (!state.loaded) { big.textContent = "—"; pill.textContent = "—"; pill.className = "pill"; return; }
@@ -215,18 +226,31 @@
     } else {
       big.textContent = "예매 진행 중"; pill.textContent = "OPEN"; pill.className = "pill on";
     }
-    var o = isOpen(); if (o !== wasOpen) { wasOpen = o; render(); }
+    var o = isOpen();
+    if (o !== wasOpen) {
+      wasOpen = o;
+      render();
+      if (o) refresh();
+    }
   }
-  setInterval(tick, 1000);
+  setInterval(tick, 200);
 
   /* ---- data ---- */
   async function refresh() {
     try {
+      var t0 = Date.now();
       var r = await fetch("/api/shows", { cache: "no-store" });
+      var t1 = Date.now();
       if (!r.ok) throw new Error("bad status");
       var d = await r.json();
-      state.shows = d.shows; state.price = d.price || 0; state.openAt = new Date(d.openAt).getTime(); state.offset = new Date(d.now).getTime() - Date.now();
-      state.loaded = true; state.failed = false;
+      var rtt = Math.max(0, t1 - t0);
+      var serverNow = typeof d.nowMs === "number" ? d.nowMs : new Date(d.now).getTime();
+      state.shows = d.shows || [];
+      state.price = d.price || 0;
+      state.openAt = typeof d.openAtMs === "number" ? d.openAtMs : new Date(d.openAt).getTime();
+      state.offset = (serverNow + Math.round(rtt / 2)) - t1;
+      state.loaded = true;
+      state.failed = false;
     } catch (e) { state.failed = true; }
     tick(); render();
   }
@@ -237,7 +261,7 @@
     if (state.failed && !state.loaded) return { label: "연결 확인 중", off: true };
     if (!state.loaded) return { label: "불러오는 중", off: true };
     if (mine) return { label: mine.show === s.id ? "예매 완료" : "이미 예매함", off: true };
-    if (!isOpen()) return { label: "11.04 20:00 오픈", off: true };
+    if (!isOpen()) return { label: formatOpenLabel(state.openAt), off: true };
     if (s.soldOut) return { label: "매진", off: true };
     return { label: "예매하기", off: false };
   }
@@ -373,7 +397,10 @@
           mine = { code: r.code, show: s.id, name: name, phone: digits }; saveMine();
           dlg.busy = false; dlg.step = 3; dlg.code = r.code; say("예매가 완료되었습니다."); renderDlg();
         } catch (ex) {
-          dlg.busy = false; dlg.error = ex.status ? ex.message : "연결에 실패했습니다. 잠시 후 다시 시도해주세요."; renderDlg();
+          dlg.busy = false;
+          dlg.error = ex.status ? ex.message : "연결에 실패했습니다. 잠시 후 다시 시도해주세요.";
+          if (ex.code === "soldout") refresh();
+          renderDlg();
         }
       });
       if (dlg.name) nm.value = dlg.name; if (dlg.phone) ph.value = fmtPhone(dlg.phone);
