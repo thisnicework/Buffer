@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning server.js",
-    "dev": "node --watch --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --watch-path=server.js --watch-path=.env --disable-warning=ExperimentalWarning server.js",
     "dev:vite": "vite",
     "build": "vite build",
     "preview": "vite preview"
