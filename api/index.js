@@ -204,22 +204,34 @@ async function handler(req, res) {
   if (route === "POST /api/lookup" || route === "POST /api/cancel") {
     const b = await getJson(req);
     const phone = normalizePhone(b.phone);
+    const name = cleanName(b.name);
     const code = String(b.code || "").trim().toUpperCase();
-    if (!phone || !/^BUF-[A-D]-\d{2}$/.test(code)) {
-      return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 예매번호와 전화번호를 확인해주세요." });
+
+    if (!phone) {
+      return send(res, 400, { error: "bad_request", message: "전화번호를 올바르게 입력해주세요." });
     }
 
-    const { data: row } = await supabase
+    let query = supabase
       .from("reservations")
       .select("show_id, seat, code, name, phone, created_at")
-      .eq("code", code)
-      .eq("phone", phone)
-      .maybeSingle();
+      .eq("phone", phone);
 
-    if (!row) return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 예매번호와 전화번호를 확인해주세요." });
+    if (code && /^BUF-[A-D]-\d{2}$/.test(code)) {
+      query = query.eq("code", code);
+    }
+
+    const { data: row } = await query.maybeSingle();
+
+    if (!row) {
+      return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 이름과 전화번호를 확인해주세요." });
+    }
+
+    if (name && cleanName(row.name) !== name) {
+      return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 이름과 전화번호를 확인해주세요." });
+    }
 
     if (route === "POST /api/cancel") {
-      await supabase.from("reservations").delete().eq("code", code).eq("phone", phone);
+      await supabase.from("reservations").delete().eq("phone", phone);
       return send(res, 200, { ok: true });
     }
     return send(res, 200, { code: row.code, show: row.show_id, name: row.name, phone: row.phone });

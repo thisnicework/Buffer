@@ -206,29 +206,29 @@ async function main() {
     console.log(`✅ [검증 4 통과] 동일 전화번호로 중복 예매 시 HTTP 409 duplicate로 완벽 차단.`);
 
     // ------------------------------------------------------------------
-    // [검증 5] 조회 및 취소, 좌석 반환 검증
+    // [검증 5] 조회 및 취소, 좌석 반환 검증 (이름 + 전화번호 기반)
     // ------------------------------------------------------------------
-    console.log(`\n[검증 5] 예매 내역 조회 및 취소 & 좌석 반환 검증`);
+    console.log(`\n[검증 5] 예매 내역 조회 및 취소 & 좌석 반환 검증 (이름 + 전화번호)`);
     const myCode = book1.data.code;
-    const lookupRes = await request(openServer, "POST", "/api/lookup", { code: myCode, phone: samePhone });
+    const lookupRes = await request(openServer, "POST", "/api/lookup", { name: "동일인1", phone: samePhone });
     if (lookupRes.status !== 200 || lookupRes.data.code !== myCode) {
       throw new Error(`❌ 예매 조회 실패: ${JSON.stringify(lookupRes.data)}`);
     }
-    console.log(`- 예매 조회 성공: code=${lookupRes.data.code}, name=${lookupRes.data.name}`);
+    console.log(`- 이름+전화번호로 예매 조회 성공: code=${lookupRes.data.code}, name=${lookupRes.data.name}`);
 
-    // 취소 요청
-    const cancelRes = await request(openServer, "POST", "/api/cancel", { code: myCode, phone: samePhone });
+    // 취소 요청 (이름 + 전화번호)
+    const cancelRes = await request(openServer, "POST", "/api/cancel", { name: "동일인1", phone: samePhone });
     if (cancelRes.status !== 200 || cancelRes.data.ok !== true) {
       throw new Error(`❌ 예매 취소 실패: ${JSON.stringify(cancelRes.data)}`);
     }
     console.log(`- 예매 취소 성공: ok=${cancelRes.data.ok}`);
 
     // 취소 후 재조회 시 404 확인
-    const lookupAfterCancel = await request(openServer, "POST", "/api/lookup", { code: myCode, phone: samePhone });
+    const lookupAfterCancel = await request(openServer, "POST", "/api/lookup", { name: "동일인1", phone: samePhone });
     if (lookupAfterCancel.status !== 404) {
       throw new Error(`❌ 취소된 예매가 여전히 조회됩니다: status=${lookupAfterCancel.status}`);
     }
-    console.log(`✅ [검증 5 통과] 예매 조회 및 취소가 완벽하게 동작하며 취소 시 404를 반환합니다.`);
+    console.log(`✅ [검증 5 통과] 이름과 전화번호만으로 예매 조회 및 취소가 완벽하게 동작하며 취소 시 404를 반환합니다.`);
 
     // ------------------------------------------------------------------
     // [검증 6] 테스트 데이터 완전 정리

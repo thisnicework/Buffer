@@ -228,48 +228,46 @@ async function dbBook(showId, name, phone) {
   return bookSqlite(showId, name, phone);
 }
 
-// 5. 예매 내역 조회
-async function dbLookup(code, phone) {
+// 5. 예매 내역 조회 (전화번호 및 이름/코드)
+async function dbLookup(phone, name, code) {
   if (supabase) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("reservations")
         .select("show_id, seat, code, name, phone, created_at")
-        .eq("code", code)
-        .eq("phone", phone)
-        .maybeSingle();
-      if (!error && data) return data;
+        .eq("phone", phone);
+      if (code && /^BUF-[A-D]-\d{2}$/.test(code)) {
+        query = query.eq("code", code);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (!error && data) {
+        if (!name || cleanName(data.name) === name) return data;
+      }
     } catch (e) {
       console.warn("⚠️  [Supabase] 조회 중 에러:", e.message);
     }
   }
-  return sqliteQueries.lookup.get(code, phone);
+  const row = sqliteDb.prepare("SELECT show_id, seat, code, name, phone, created_at FROM reservations WHERE phone = ?").get(phone);
+  if (row) {
+    if (code && row.code !== code) return null;
+    if (name && cleanName(row.name) !== name) return null;
+    return row;
+  }
+  return null;
 }
 
 // 6. 예매 취소
-async function dbCancel(code, phone) {
+async function dbCancel(phone) {
   if (supabase) {
     try {
-      const { data: row } = await supabase
-        .from("reservations")
-        .select("id")
-        .eq("code", code)
-        .eq("phone", phone)
-        .maybeSingle();
-      if (row) {
-        await supabase.from("reservations").delete().eq("code", code).eq("phone", phone);
-        return true;
-      }
+      await supabase.from("reservations").delete().eq("phone", phone);
+      return true;
     } catch (e) {
       console.warn("⚠️  [Supabase] 취소 중 에러:", e.message);
     }
   }
-  const row = sqliteQueries.lookup.get(code, phone);
-  if (row) {
-    sqliteQueries.cancel.run(code, phone);
-    return true;
-  }
-  return false;
+  sqliteDb.prepare("DELETE FROM reservations WHERE phone = ?").run(phone);
+  return true;
 }
 
 // 7. 관리자 전체 목록 조회
@@ -410,15 +408,16 @@ async function api(req, res, url) {
     }
     const b = await readJson(req);
     const phone = normalizePhone(b.phone);
+    const name = cleanName(b.name);
     const code = String(b.code || "").trim().toUpperCase();
-    if (!phone || !/^BUF-[A-D]-\d{2}$/.test(code)) {
-      return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 예매번호와 전화번호를 확인해주세요." });
+    if (!phone) {
+      return send(res, 400, { error: "bad_request", message: "전화번호를 올바르게 입력해주세요." });
     }
-    const row = await dbLookup(code, phone);
-    if (!row) return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 예매번호와 전화번호를 확인해주세요." });
+    const row = await dbLookup(phone, name, code);
+    if (!row) return send(res, 404, { error: "not_found", message: "예매 내역을 찾을 수 없습니다. 이름과 전화번호를 확인해주세요." });
 
     if (route === "POST /api/cancel") {
-      await dbCancel(code, phone);
+      await dbCancel(phone);
       return send(res, 200, { ok: true });
     }
     return send(res, 200, { code: row.code, show: row.show_id, name: row.name, phone: row.phone });

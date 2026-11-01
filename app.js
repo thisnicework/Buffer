@@ -20,7 +20,7 @@
     if (d.length > 3) return d.slice(0, 3) + "-" + d.slice(3);
     return d;
   }
-  function saveMine() { try { if (mine) localStorage.setItem(STORE, JSON.stringify({ code: mine.code, phone: mine.phone })); else localStorage.removeItem(STORE); } catch (e) {} }
+  function saveMine() { try { if (mine) localStorage.setItem(STORE, JSON.stringify({ name: mine.name, phone: mine.phone, code: mine.code })); else localStorage.removeItem(STORE); } catch (e) {} }
 
   async function post(url, body) {
     var r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -291,11 +291,11 @@
     var z = $("mineZone"), box = $("mine"); z.hidden = false; box.textContent = "";
     if (!mine) {
       // 안내 문구는 입력칸 폭(420px)에 묶이지 않게 폼 밖에 두어 한 줄로
-      var note = el("p", "notice", "이미 예매하셨다면 예매번호와 전화번호로 내역을 확인하거나 취소할 수 있습니다.");
+      var note = el("p", "notice", "이미 예매하셨다면 이름과 전화번호로 내역을 확인하거나 취소할 수 있습니다.");
       note.style.maxWidth = "none"; note.style.marginTop = "0"; box.appendChild(note);
       var f = el("form"); f.style.maxWidth = "420px"; f.noValidate = true;
       function field(id, lab, ph, mode) { var l = el("label", "field"); l.htmlFor = id; l.appendChild(el("span", null, lab)); var i = el("input"); i.id = id; i.type = "text"; i.placeholder = ph; if (mode) i.inputMode = mode; l.appendChild(i); f.appendChild(l); return i; }
-      var c = field("l-code", "예매번호", "BUF-A-01"); c.autocapitalize = "characters"; c.maxLength = 10;
+      var nm = field("l-name", "이름", "이름"); nm.maxLength = 30;
       var p = field("l-phone", "전화번호", "010-0000-0000", "numeric"); p.maxLength = 13;
       p.addEventListener("input", function () { p.value = fmtPhone(p.value); });
       var err = el("div", "err", lookupErr); err.setAttribute("role", "alert"); f.appendChild(err);
@@ -303,9 +303,13 @@
       f.appendChild(go);
       f.addEventListener("submit", async function (e) {
         e.preventDefault(); if (lookupBusy) return;
+        var nameVal = nm.value.trim();
+        var phoneVal = p.value.replace(/\D/g, "");
+        if (!nameVal) { lookupErr = "이름을 입력해주세요."; render(); return; }
+        if (!/^01[016789]\d{7,8}$/.test(phoneVal)) { lookupErr = "휴대전화 번호를 010-0000-0000 형식으로 입력해주세요."; render(); return; }
         lookupBusy = true; lookupErr = ""; go.disabled = true; go.textContent = "확인 중";
         try {
-          var r = await post("/api/lookup", { code: c.value, phone: p.value });
+          var r = await post("/api/lookup", { name: nameVal, phone: phoneVal });
           mine = { code: r.code, show: r.show, name: r.name, phone: r.phone }; saveMine();
         } catch (ex) { lookupErr = ex.message; }
         lookupBusy = false; render();
@@ -315,9 +319,9 @@
     var s = showById(mine.show) || { date: "", dowKo: "", time: "" };
     var stub = el("div", "stub"), a = el("div"), side = el("div", "side");
     a.appendChild(el("div", "label", "TICKET"));
-    a.appendChild(el("div", "code", mine.code));
+    a.appendChild(el("div", "code", s.date + " " + s.time));
     var meta = el("div", "meta");
-    meta.appendChild(el("span", null, s.date + " (" + s.dowKo + ") " + s.time));
+    meta.appendChild(el("span", null, s.date + " (" + s.dowKo + "요일) " + s.time));
     meta.appendChild(el("span", null, mine.name + " · " + maskPhone(mine.phone)));
     a.appendChild(meta);
     if (!confirmCancel) {
@@ -339,7 +343,7 @@
     if (!mine || cancelBusy) return;
     cancelBusy = true; renderMine();
     try {
-      await post("/api/cancel", { code: mine.code, phone: mine.phone });
+      await post("/api/cancel", { name: mine.name, phone: mine.phone, code: mine.code });
       mine = null; saveMine(); confirmCancel = false; say("예매가 취소되었습니다.");
     } catch (e) { say("취소하지 못했습니다. 잠시 후 다시 시도해주세요."); }
     cancelBusy = false; await refresh();
@@ -373,23 +377,31 @@
       var ok = el("button", "btn solid", "확인하고 계속"); ok.type = "button"; ok.addEventListener("click", function () { dlg.step = 2; renderDlg(); });
       act.appendChild(no); act.appendChild(ok); box.appendChild(act); focusEl = ok;
     } else if (dlg.step === 2) {
-      // 2단계: 예매자 이름·전화번호 입력 → 예매 확정
+      // 2단계: 이름, 이름확인, 번호, 번호확인 입력 → 예매 확정
       h.textContent = "예매자 정보 입력"; box.appendChild(h); box.appendChild(which);
       var f = el("form"); f.noValidate = true;
       function field(id, lab, type, ph) { var l = el("label", "field"); l.htmlFor = id; l.appendChild(el("span", null, lab)); var i = el("input"); i.id = id; i.type = type; if (ph) i.placeholder = ph; l.appendChild(i); f.appendChild(l); return i; }
       var nm = field("f-name", "이름", "text", "이름"); nm.autocomplete = "name"; nm.maxLength = 30;
+      var nmConf = field("f-name-confirm", "이름 확인", "text", "이름 다시 입력"); nmConf.maxLength = 30;
       var ph = field("f-phone", "전화번호", "tel", "010-0000-0000"); ph.autocomplete = "tel"; ph.inputMode = "numeric"; ph.maxLength = 13;
+      var phConf = field("f-phone-confirm", "전화번호 확인", "tel", "010-0000-0000"); phConf.inputMode = "numeric"; phConf.maxLength = 13;
       var err = el("div", "err", dlg.error); err.setAttribute("role", "alert"); f.appendChild(err);
       var act2 = el("div", "actions");
       var back = el("button", "btn", "이전"); back.type = "button"; back.disabled = dlg.busy; back.addEventListener("click", function () { dlg.step = 1; dlg.error = ""; renderDlg(); });
       var go = el("button", "btn solid", dlg.busy ? "처리 중" : "예매하기"); go.type = "submit"; go.disabled = dlg.busy;
       act2.appendChild(back); act2.appendChild(go); f.appendChild(act2);
       ph.addEventListener("input", function () { ph.value = fmtPhone(ph.value); });
+      phConf.addEventListener("input", function () { phConf.value = fmtPhone(phConf.value); });
       f.addEventListener("submit", async function (e) {
         e.preventDefault(); if (dlg.busy) return;
-        var name = nm.value.trim(), digits = ph.value.replace(/\D/g, "");
+        var name = nm.value.trim(), nameConf = nmConf.value.trim();
+        var digits = ph.value.replace(/\D/g, ""), digitsConf = phConf.value.replace(/\D/g, "");
         if (!name) { err.textContent = "이름을 입력해주세요."; nm.focus(); return; }
+        if (!nameConf) { err.textContent = "이름 확인을 입력해주세요."; nmConf.focus(); return; }
+        if (name !== nameConf) { err.textContent = "입력하신 이름이 일치하지 않습니다."; nmConf.focus(); return; }
         if (!/^01[016789]\d{7,8}$/.test(digits)) { err.textContent = "휴대전화 번호를 010-0000-0000 형식으로 입력해주세요."; ph.focus(); return; }
+        if (!digitsConf) { err.textContent = "전화번호 확인을 입력해주세요."; phConf.focus(); return; }
+        if (digits !== digitsConf) { err.textContent = "입력하신 전화번호가 일치하지 않습니다."; phConf.focus(); return; }
         dlg.name = name; dlg.phone = digits; dlg.error = "";
         dlg.busy = true; go.disabled = true; back.disabled = true; go.textContent = "처리 중";
         try {
@@ -403,13 +415,19 @@
           renderDlg();
         }
       });
-      if (dlg.name) nm.value = dlg.name; if (dlg.phone) ph.value = fmtPhone(dlg.phone);
+      if (dlg.name) { nm.value = dlg.name; nmConf.value = dlg.name; }
+      if (dlg.phone) { ph.value = fmtPhone(dlg.phone); phConf.value = fmtPhone(dlg.phone); }
       box.appendChild(f); focusEl = nm;
     } else {
       h.textContent = "예매가 완료되었습니다"; box.appendChild(h); box.appendChild(which);
-      box.appendChild(el("div", "big-code", dlg.code));
-      box.appendChild(el("p", null, dlg.name + " · " + maskPhone(dlg.phone)));
-      box.appendChild(el("p", null, "예매번호를 꼭 기억해주세요. 취소나 확인 시 예매번호와 전화번호가 필요합니다."));
+      var metaBox = el("div", "meta");
+      metaBox.style.margin = "20px 0";
+      metaBox.style.fontSize = "15px";
+      metaBox.style.lineHeight = "1.6";
+      metaBox.appendChild(el("p", null, dlg.name + " 님 (" + maskPhone(dlg.phone) + ")"));
+      metaBox.appendChild(el("p", null, "정상적으로 예매가 완료되었습니다."));
+      box.appendChild(metaBox);
+      box.appendChild(el("p", null, "예매 내역 확인이나 취소는 이름과 전화번호로 언제든 가능합니다."));
       var act3 = el("div", "actions"); var done = el("button", "btn solid", "확인"); done.type = "button"; done.addEventListener("click", closeDlg);
       act3.appendChild(done); box.appendChild(act3); focusEl = done;
     }
@@ -422,8 +440,8 @@
   (async function () {
     try {
       var saved = JSON.parse(localStorage.getItem(STORE) || "null");
-      if (saved && saved.code && saved.phone) {
-        try { var r = await post("/api/lookup", saved); mine = { code: r.code, show: r.show, name: r.name, phone: r.phone }; }
+      if (saved && saved.phone) {
+        try { var r = await post("/api/lookup", { name: saved.name, phone: saved.phone, code: saved.code }); mine = { code: r.code, show: r.show, name: r.name, phone: r.phone }; }
         catch (e) { if (e.status === 404) { mine = null; saveMine(); } }
       }
     } catch (e) {}
