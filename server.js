@@ -1,4 +1,4 @@
-// BUFFER 버퍼 티켓 예매 서버 — Node 22.5+ (Supabase Cloud + 내장 node:sqlite 폴백)
+// BUFFER 버퍼 티켓 예매 서버 — Node 22.5+ (Vite HMR + Supabase Cloud + 내장 node:sqlite 폴백)
 "use strict";
 const http = require("node:http");
 const fs = require("node:fs");
@@ -38,6 +38,9 @@ const SEATS = (() => {
   }
   return m;
 })();
+
+const ROOT_DIR = __dirname;
+const DIST_DIR = path.join(__dirname, "dist");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const ASSETS_DIR = path.join(__dirname, "assets"); // 디자인 원본을 /assets/ 로 그대로 서빙
 
@@ -451,86 +454,147 @@ async function api(req, res, url) {
 }
 
 const TYPES = {
-  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".mp4": "video/mp4", ".ico": "image/x-icon", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".txt": "text/plain; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
 };
 
 function serveStatic(req, res, url) {
   let p = decodeURIComponent(url.pathname);
   if (p === "/") p = "/index.html";
   if (p === "/admin") p = "/admin.html";
-  const isAsset = p.startsWith("/assets/");
-  const base = isAsset ? ASSETS_DIR : PUBLIC_DIR;
-  const file = path.normalize(path.join(base, isAsset ? p.slice("/assets".length) : p));
-  if (!file.startsWith(base + path.sep)) return send(res, 403, "Forbidden");
-  fs.readFile(file, (err, data) => {
-    if (err) return send(res, 404, "Not found");
-    res.writeHead(200, {
-      "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",
-      "Cache-Control": isAsset ? "public, max-age=3600" : "no-cache",
-    });
-    res.end(data);
-  });
+
+  const candidates = [
+    path.join(DIST_DIR, p),
+    path.join(ROOT_DIR, p),
+    path.join(PUBLIC_DIR, p),
+    p.startsWith("/assets/") ? path.join(ASSETS_DIR, p.slice("/assets".length)) : null,
+  ].filter(Boolean);
+
+  for (const file of candidates) {
+    if (fs.existsSync(file)) {
+      try {
+        const stat = fs.statSync(file);
+        if (stat.isFile()) {
+          const isAsset = p.startsWith("/assets/") || p.startsWith("/fonts/");
+          res.writeHead(200, {
+            "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",
+            "Cache-Control": isAsset ? "public, max-age=3600" : "no-cache",
+          });
+          fs.createReadStream(file).pipe(res);
+          return;
+        }
+      } catch (_) {}
+    }
+  }
+
+  return send(res, 404, "Not found");
 }
 
-const server = http.createServer(async (req, res) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Referrer-Policy", "same-origin");
-  res.setHeader("X-Frame-Options", "DENY");
-  try {
-    const url = new URL(req.url, "http://localhost");
-    if (url.pathname.startsWith("/api/")) return await api(req, res, url);
-    if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
-    return serveStatic(req, res, url);
-  } catch (e) {
-    if (e.status) return send(res, e.status, { error: "bad_request", message: "요청을 처리할 수 없습니다." }, { Connection: "close" });
-    console.error(e);
-    return send(res, 500, { error: "server", message: "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요." });
+async function startServer() {
+  let vite = null;
+  const isDev = process.env.NODE_ENV !== "production";
+
+  const server = http.createServer(async (req, res) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "same-origin");
+    res.setHeader("X-Frame-Options", "DENY");
+    try {
+      const url = new URL(req.url, "http://localhost");
+      if (url.pathname.startsWith("/api/")) return await api(req, res, url);
+      if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
+
+      if (vite) {
+        if (url.pathname === "/admin") req.url = "/admin.html";
+        return vite.middlewares(req, res, () => serveStatic(req, res, url));
+      }
+
+      return serveStatic(req, res, url);
+    } catch (e) {
+      if (e.status) return send(res, e.status, { error: "bad_request", message: "요청을 처리할 수 없습니다." }, { Connection: "close" });
+      console.error(e);
+      return send(res, 500, { error: "server", message: "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요." });
+    }
+  });
+
+  if (isDev) {
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+          ws: { server },
+        },
+        appType: "spa",
+      });
+    } catch (e) {
+      console.warn("⚠️  Vite dev middleware 미사용 (정적 파일 서빙으로 대체):", e.message);
+    }
   }
-});
 
-server.listen(PORT, () => {
-  const kstOpenStr = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(OPEN_AT));
+  server.listen(PORT, () => {
+    const kstOpenStr = new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(OPEN_AT));
 
-  const statusText = isOpen()
-    ? "🟢 예매 진행 중 (오픈됨)"
-    : `🟡 오픈 전 (오픈 시각: ${kstOpenStr} KST)`;
+    const statusText = isOpen()
+      ? "🟢 예매 진행 중 (오픈됨)"
+      : `🟡 오픈 전 (오픈 시각: ${kstOpenStr} KST)`;
 
-  const adminText = ADMIN_TOKEN
-    ? "🟢 켜짐"
-    : "⚪️ 꺼짐 (.env에 ADMIN_TOKEN 설정 시 활성화)";
+    const adminText = ADMIN_TOKEN
+      ? "🟢 켜짐"
+      : "⚪️ 꺼짐 (.env에 ADMIN_TOKEN 설정 시 활성화)";
 
-  const dbText = supabase
-    ? `🟢 Supabase 연동 (${SUPABASE_URL})`
-    : `⚪️ SQLite 로컬 모드 (${DB_PATH})`;
+    const dbText = supabase
+      ? `🟢 Supabase 연동 (${SUPABASE_URL})`
+      : `⚪️ SQLite 로컬 모드 (${DB_PATH})`;
 
-  const seatsInfo = SHOWS.map((x) => `${x.id}=${SEATS[x.id]}`).join(" ");
+    const viteText = vite
+      ? "🟢 Vite HMR 개발 모드 활성화"
+      : "⚪️ 정적 번들 모드";
 
-  console.log(`
+    const seatsInfo = SHOWS.map((x) => `${x.id}=${SEATS[x.id]}`).join(" ");
+
+    console.log(`
   🎟️  BUFFER 티켓 예매 서버 실행 완료
 
   ➜  접속 주소:      http://localhost:${PORT}/
   ➜  관리자 페이지:  http://localhost:${PORT}/admin
+  ➜  프론트엔드:      ${viteText}
   ➜  데이터베이스:    ${dbText}
   ➜  예매 상태:      ${statusText}
   ➜  회차별 좌석:    ${seatsInfo}
   ➜  관리자 기능:    ${adminText}
 `);
-});
-
-for (const sig of ["SIGINT", "SIGTERM"]) {
-  process.on(sig, () => {
-    server.close(() => {
-      try { sqliteDb.close(); } catch (_) {}
-      process.exit(0);
-    });
   });
+
+  for (const sig of ["SIGINT", "SIGTERM"]) {
+    process.on(sig, () => {
+      server.close(async () => {
+        if (vite) {
+          try { await vite.close(); } catch (_) {}
+        }
+        try { sqliteDb.close(); } catch (_) {}
+        process.exit(0);
+      });
+    });
+  }
 }
+
+startServer();

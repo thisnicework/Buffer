@@ -3,12 +3,21 @@
 공연 4회차(11.14 토 3PM·7PM, 11.15 일 3PM·7PM)의 자유석 예매 사이트입니다.
 Node 22.5 이상에서 동작하며, Supabase 클라우드 데이터베이스(및 로컬 SQLite 폴백)를 지원합니다.
 
-## 실행
+## 실행 및 개발
 
 ```bash
-npm install              # 의존성 설치 (@supabase/supabase-js)
-npm run dev              # 개발 서버 실행 (파일 감지 watch 모드, http://localhost:3000)
-# 또는 운영 실행
+npm install              # 의존성 설치 (@supabase/supabase-js, vite)
+
+# 1. 통합 개발 서버 실행 (Node 백엔드 + Vite HMR 실시간 새로고침)
+npm run dev              # http://localhost:3000 접속 (코드 수정 시 브라우저 즉시 반영)
+
+# 2. Vite 단독 개발 서버 (필요 시)
+npm run dev:vite         # http://localhost:5173 접속 (/api는 3000번 포트로 프록시)
+
+# 3. Vite 프로덕션 빌드
+npm run build            # dist/ 디렉터리에 번들링 및 최적화
+
+# 4. 프로덕션 실행
 npm start
 ```
 
