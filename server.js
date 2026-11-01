@@ -13,7 +13,7 @@ if (typeof process.loadEnvFile === "function") {
 
 const PORT = Number(process.env.PORT || 3000);
 const OPEN_AT = new Date(process.env.OPEN_AT || "2026-11-04T20:00:00+09:00").getTime();
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "admin1234";
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "data", "tickets.db");
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 const BOOK_RATE_MAX = Number(process.env.BOOK_RATE_MAX || 30); // IP당 10분 내 예매 시도 한도 (공용 와이파이를 고려해 넉넉히)
@@ -469,10 +469,32 @@ const TYPES = {
   ".json": "application/json; charset=utf-8",
 };
 
+const BLOCKED_FILES = new Set([
+  "server.js",
+  "package.json",
+  "package-lock.json",
+  "supabase-schema.sql",
+  "vite.config.js",
+  "vite.config.mjs",
+]);
+
+function isForbiddenPath(relPath) {
+  const normalized = path.normalize(relPath).replace(/^[/\\]+/, "");
+  // Block any hidden file or path (.env, .git, etc.)
+  if (normalized.split(/[/\\]/).some((part) => part.startsWith("."))) return true;
+  // Block server/backend files
+  const baseName = path.basename(normalized);
+  if (BLOCKED_FILES.has(baseName)) return true;
+  if (baseName.endsWith(".db") || baseName.endsWith(".db-wal") || baseName.endsWith(".db-shm")) return true;
+  return false;
+}
+
 function serveStatic(req, res, url) {
   let p = decodeURIComponent(url.pathname);
   if (p === "/") p = "/index.html";
   if (p === "/admin") p = "/admin.html";
+
+  if (isForbiddenPath(p)) return send(res, 403, "Forbidden");
 
   const candidates = [
     path.join(DIST_DIR, p),
@@ -511,6 +533,7 @@ async function startServer() {
     res.setHeader("X-Frame-Options", "DENY");
     try {
       const url = new URL(req.url, "http://localhost");
+      if (isForbiddenPath(url.pathname)) return send(res, 403, "Forbidden");
       if (url.pathname.startsWith("/api/")) return await api(req, res, url);
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
 
