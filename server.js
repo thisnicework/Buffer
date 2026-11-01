@@ -42,7 +42,7 @@ const SEATS = (() => {
 const ROOT_DIR = __dirname;
 const DIST_DIR = path.join(__dirname, "dist");
 const PUBLIC_DIR = path.join(__dirname, "public");
-const ASSETS_DIR = path.join(__dirname, "assets"); // 디자인 원본을 /assets/ 로 그대로 서빙
+const ASSETS_DIR = path.join(__dirname, "public", "assets");
 
 const SHOWS = [
   { id: "A", date: "11.14", dow: "SAT", dowKo: "토", time: "3PM" },
