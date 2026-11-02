@@ -138,7 +138,7 @@
     r4.appendChild(c1); r4.appendChild(c2);
     var d = el("div", "pf-desc"); row("one").appendChild(d);
     d.appendChild(el("p", null, "퍼포머 · 김민 김선율 김수아 김지민 염지원 이봄 이승환 임세령 최승영"));
-    d.appendChild(el("p", null, "Space Padong · 3PM / 7PM · Presented by Team Sfumato"));
+    d.appendChild(el("p", null, "3PM / 7PM · Presented by Team Sfumato"));
 
     box.appendChild(stage); box.appendChild(panel);
 
