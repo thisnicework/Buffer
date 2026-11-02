@@ -6,11 +6,16 @@
   var dlg = null, lastFocus = null;
   var STORE = "buffer-ticket";
 
+  var isTestMode = /[?&#](test|open)(=1)?\b/i.test(window.location.search + window.location.hash) || (function () { try { return sessionStorage.getItem("buffer_test_mode") === "1"; } catch (e) { return false; } })();
+  if (/[?&#](test|open)(=1)?\b/i.test(window.location.search + window.location.hash)) {
+    try { sessionStorage.setItem("buffer_test_mode", "1"); } catch (e) {}
+  }
+
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function pad(n) { return (n < 10 ? "0" : "") + n; }
   function now() { return Date.now() + state.offset; }
-  function isOpen() { return state.loaded && now() >= state.openAt; }
+  function isOpen() { return isTestMode || (state.loaded && now() >= state.openAt); }
   function showById(id) { return state.shows.filter(function (s) { return s.id === id; })[0]; }
   function say(m) { $("live").textContent = m; }
   function maskPhone(p) { var d = String(p).replace(/\D/g, ""); return d.length >= 8 ? d.slice(0, 3) + "-****-" + d.slice(-4) : d; }
@@ -219,12 +224,14 @@
     var big = $("big"), pill = $("pill");
     if (!state.loaded) { big.textContent = "—"; pill.textContent = "—"; pill.className = "pill"; return; }
     var diff = state.openAt - now();
-    if (diff > 0) {
+    if (diff > 0 && !isTestMode) {
       var s = Math.floor(diff / 1000), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
       big.textContent = "D-" + d + "  " + pad(h) + ":" + pad(m) + ":" + pad(x);
       pill.textContent = "오픈 전"; pill.className = "pill";
     } else {
-      big.textContent = "예매 진행 중"; pill.textContent = "OPEN"; pill.className = "pill on";
+      big.textContent = isTestMode ? "테스트 예매 진행 중" : "예매 진행 중";
+      pill.textContent = isTestMode ? "TEST OPEN" : "OPEN";
+      pill.className = "pill on";
     }
     var o = isOpen();
     if (o !== wasOpen) {
@@ -233,13 +240,26 @@
       if (o) refresh();
     }
   }
+  var pillEl = $("pill");
+  if (pillEl) {
+    pillEl.style.cursor = "pointer";
+    pillEl.setAttribute("title", "테스트 모드 전환");
+    pillEl.addEventListener("click", function () {
+      isTestMode = !isTestMode;
+      try {
+        if (isTestMode) sessionStorage.setItem("buffer_test_mode", "1");
+        else sessionStorage.removeItem("buffer_test_mode");
+      } catch (e) {}
+      render(); tick(); refresh();
+    });
+  }
   setInterval(tick, 200);
 
   /* ---- data ---- */
   async function refresh() {
     try {
       var t0 = Date.now();
-      var r = await fetch("/api/shows", { cache: "no-store" });
+      var r = await fetch("/api/shows" + (isTestMode ? "?test=1" : ""), { cache: "no-store" });
       var t1 = Date.now();
       if (!r.ok) throw new Error("bad status");
       var d = await r.json();
@@ -429,7 +449,7 @@
         dlg.name = name; dlg.phone = digits; dlg.error = "";
         dlg.busy = true; go.disabled = true; back.disabled = true; go.textContent = "처리 중";
         try {
-          var r = await post("/api/book", { show: s.id, name: name, phone: digits, consent: true });
+          var r = await post("/api/book" + (isTestMode ? "?test=1" : ""), { show: s.id, name: name, phone: digits, consent: true, test: isTestMode });
           mine = { code: r.code, show: s.id, name: name, phone: digits }; saveMine();
           dlg.busy = false; dlg.step = 3; dlg.code = r.code; say("예매가 완료되었습니다."); renderDlg();
         } catch (ex) {
