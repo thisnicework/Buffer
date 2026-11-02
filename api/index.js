@@ -20,8 +20,9 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "https://qatrsegoqwandtsasunp.s
 const SUPABASE_KEY = process.env.SUPABASE_KEY || "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
 
+const DEFAULT_SEATS = { A: 26, B: 26, C: 32, D: 32 };
 const SEATS = (() => {
-  const m = { A: CAP, B: CAP, C: CAP, D: CAP };
+  const m = { ...DEFAULT_SEATS };
   for (const part of String(process.env.SEATS || "").split(",")) {
     const r = /^\s*([A-D])\s*=\s*(\d{1,2})\s*$/i.exec(part);
     if (r) m[r[1].toUpperCase()] = Number(r[2]);

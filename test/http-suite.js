@@ -114,8 +114,9 @@ async function main() {
     if (!openShows.data.open) throw new Error("오픈 상태여야 합니다!");
     console.log(`- 오픈된 서버 상태: open=${openShows.data.open}, shows count=${openShows.data.shows.length}`);
 
-    // 정원 35명인 A 회차에 50명 동시 요청 발송!
-    console.log(`- 회차 A(정원 35명)에 50명의 서로 다른 사용자가 완전 동시에 예매를 요청합니다.`);
+    // 정원 26명인 A 회차에 50명 동시 요청 발송!
+    const capA = 26;
+    console.log(`- 회차 A(정원 ${capA}명)에 50명의 서로 다른 사용자가 완전 동시에 예매를 요청합니다.`);
     const concurrentCount = 50;
     const reqPromises = [];
     for (let i = 1; i <= concurrentCount; i++) {
@@ -154,16 +155,16 @@ async function main() {
     console.log(`- 50명 동시 예매 결과: 201 Created=${bookedCount}건, 409 Soldout=${soldoutCount}건, 중복=${dupCount}건`);
     console.log(`- 발급된 고유 예매 번호 수: ${new Set(codes).size}개`);
 
-    if (bookedCount !== 35) {
-      throw new Error(`❌ 정원 초과 발생! 정원 35명인데 ${bookedCount}명이 예매되었습니다!`);
+    if (bookedCount !== capA) {
+      throw new Error(`❌ 정원 초과 발생! 정원 ${capA}명인데 ${bookedCount}명이 예매되었습니다!`);
     }
-    if (soldoutCount !== 15) {
-      throw new Error(`❌ 매진 거절 수 불일치! 15명이 거절되어야 하는데 ${soldoutCount}명이 거절됨`);
+    if (soldoutCount !== concurrentCount - capA) {
+      throw new Error(`❌ 매진 거절 수 불일치! ${concurrentCount - capA}명이 거절되어야 하는데 ${soldoutCount}명이 거절됨`);
     }
-    if (new Set(codes).size !== 35) {
+    if (new Set(codes).size !== capA) {
       throw new Error("❌ 예매 코드 중복 발생!");
     }
-    console.log(`✅ [검증 3-1 통과] 50명 동시 폭주 요청 시 정확히 35명만 성공(201)하고 15명은 매진(409)으로 차단됨!`);
+    console.log(`✅ [검증 3-1 통과] 50명 동시 폭주 요청 시 정확히 ${capA}명만 성공(201)하고 ${concurrentCount - capA}명은 매진(409)으로 차단됨!`);
 
     // 매진 후 GET /api/shows 확인
     const afterFullShows = await request(openServer, "GET", "/api/shows");

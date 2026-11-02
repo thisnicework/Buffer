@@ -60,7 +60,7 @@ npm run dev
 | `SUPABASE_URL` | https://qatrsegoqwandtsasunp.supabase.co | Supabase 프로젝트 URL |
 | `SUPABASE_KEY` | sb_publishable_... | Supabase Publishable / Anon / Service Key |
 | `DB_PATH` | ./data/tickets.db | SQLite 로컬 DB 위치 (Supabase 미연동 시 폴백) |
-| `SEATS` | (전 회차 35) | 회차별 예매 좌석 수. 예: `A=35,B=30,C=35,D=28` |
+| `SEATS` | `A=26,B=26,C=32,D=32` | 회차별 예매 좌석 수 (1·2회차 26매, 3·4회차 32매) |
 | `BOOK_RATE_MAX` | 30 | IP당 10분간 예매 시도 한도 |
 | `TICKET_PRICE` | 0 | 결제 화면에 표시되는 금액(원). 0이면 "무료" |
 | `TRUST_PROXY` | 0 | 프록시 뒤에서 실행하면 1 (`X-Forwarded-For` 사용) |
