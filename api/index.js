@@ -123,8 +123,6 @@ async function handler(req, res) {
       const count = counts[s.id] || 0;
       return {
         ...s,
-        capacity: cap,
-        remaining: Math.max(0, cap - count),
         soldOut: count >= cap,
       };
     });

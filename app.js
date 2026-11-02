@@ -44,18 +44,37 @@
       d.style.setProperty("--dl", (r * 0.3).toFixed(1) + "s");   // 위에서 아래로 차례로 깜빡
       box.appendChild(d);
     }
-    // 기둥 세로선 3개(왼쪽·가운데·오른쪽)를 따라 작은 블록이 위에서 아래로 흐름. 버퍼링되는 데이터처럼
-    var col = document.querySelector(".x-col"), spine = document.querySelector(".x-spine");
-    [[col, "l", [[7.5, 0], [11, -6]]], [col, "r", [[9, -3], [13, -9.5]]], [spine, "s", [[4.2, -1], [5.6, -3.8]]]].forEach(function (lane) {
-      var f = el("div", "x-flow " + lane[1]); f.setAttribute("aria-hidden", "true");
-      lane[2].forEach(function (t, k) {
-        var b = el("b");
-        b.style.setProperty("--d", t[0] + "s"); b.style.setProperty("--dl", t[1] + "s");
-        b.style.setProperty("--h", (k ? 14 : 34) + "px");
-        f.appendChild(b);
-      });
-      lane[0].appendChild(f);
-    });
+  })();
+
+  /* ---- 모바일: 로고 창(과 기둥·점·회차 표시)을 화면 세로 정중앙에 ----
+     무대(.x-stage)를 '화면 중앙' 기준으로 위아래 대칭이 되게 늘리고, 제목과 겹치는 위쪽은 잘라서 숨김.
+     사파리 주소창이 접히며 생기는 높이 변화에는 반응하지 않음(스크롤 중 흔들림 방지) */
+  (function () {
+    var hero = document.querySelector(".hero"), stage = document.querySelector(".x-stage"), ttl = document.querySelector(".x-ttl");
+    if (!hero || !stage || !ttl) return;
+    var lastW = 0;
+    function place(force) {
+      if (!force && innerWidth === lastW) return;
+      lastW = innerWidth;
+      stage.style.top = stage.style.height = stage.style.bottom = stage.style.clipPath = "";
+      if (innerWidth > 700) return;
+      var H = hero.offsetHeight, heroTop = hero.getBoundingClientRect().top + scrollY;
+      var titleBottom = ttl.getBoundingClientRect().bottom + scrollY - heroTop + 12;
+      var a = stage.querySelector(".x-txt.a"), img = stage.querySelector(".x-img");
+      var above = img.offsetHeight / 2 + 14 + (a ? a.offsetHeight : 0) + 8;   // 로고 창 위로 필요한 공간
+      var c = innerHeight / 2 - heroTop;                                     // 화면 정중앙 (첫 화면 기준 좌표)
+      c = Math.max(c, titleBottom + above);                                  // 너무 작은 화면에선 제목과 안 겹치는 만큼만 내림
+      var top = 2 * c - H;
+      stage.style.top = top + "px"; stage.style.bottom = "0px"; stage.style.height = "auto";
+      var clip = titleBottom - top;
+      if (clip > 0) stage.style.clipPath = "inset(" + clip.toFixed(1) + "px 0 0 0)";
+    }
+    function run() { place(true); }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(run);
+    addEventListener("load", run);
+    addEventListener("resize", function () { place(false); });
+    addEventListener("orientationchange", function () { setTimeout(run, 300); });
+    run();
   })();
 
   /* ---- 큰 제목 크기 맞춤: 컴퓨터에선 BUFFER·11.14–15가 가운데 기둥에 닿지 않게, 모바일에선 화면 폭 안에 ---- */
@@ -77,16 +96,34 @@
     addEventListener("resize", fit); fit();
   })();
 
-  /* ---- 기둥 안 "총 4회차 …" 줄: 기둥 폭에 들어가도록 글자 크기를 맞추고(최대 기본 크기), 남는 폭은 양끝 맞춤 ---- */
+  /* ---- 기둥 안 한 줄 글(날짜·시간 줄, "총 4회차 …" 줄): 기둥 폭에 들어가도록 글자 크기를 맞추고(최대 기본 크기), 남는 폭은 양끝 맞춤 ---- */
   (function () {
-    var p = $("xfit"); if (!p) return;
-    var t = p.querySelector(".fit");
+    var ps = document.querySelectorAll(".x-col .x-fit"); if (!ps.length) return;
+    // 두 줄 모두 들어가는 가장 작은 크기 하나로 통일 → 같은 크기로 보이고, 남는 폭은 양끝 맞춤이 채움
     function fit() {
-      p.style.fontSize = "";
-      var base = parseFloat(getComputedStyle(p).fontSize);
-      var rg = document.createRange(); rg.selectNodeContents(t);
-      var need = rg.getBoundingClientRect().width, have = p.clientWidth;
-      if (need > have) p.style.fontSize = (base * have / need * 0.985).toFixed(2) + "px";
+      var size = Infinity;
+      ps.forEach(function (p) { p.style.fontSize = ""; });
+      ps.forEach(function (p) {
+        var t = p.querySelector(".fit"); if (!t) return;
+        var base = parseFloat(getComputedStyle(p).fontSize);
+        var rg = document.createRange(); rg.selectNodeContents(t);
+        var need = rg.getBoundingClientRect().width, have = p.clientWidth;
+        size = Math.min(size, need > have ? base * have / need * 0.985 : base);
+      });
+      if (!isFinite(size)) return;
+      ps.forEach(function (p) {
+        var t = p.querySelector(".fit"); if (!t) return;
+        p.style.fontSize = size.toFixed(2) + "px";
+        t.style.letterSpacing = ""; t.style.marginRight = "";
+        // 남는 폭은 띄어쓰기에 몰지 않고 글자 사이에 고르게 나눔
+        var rg = document.createRange(); rg.selectNodeContents(t);
+        var n = t.textContent.length, extra = p.clientWidth - rg.getBoundingClientRect().width;
+        if (n > 1 && extra > 0.5) {
+          var d = extra / (n - 1);
+          t.style.letterSpacing = "calc(-.035em + " + d.toFixed(3) + "px)";
+          t.style.marginRight = (-d).toFixed(3) + "px";
+        }
+      });
     }
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
     addEventListener("resize", fit); fit();
@@ -276,13 +313,54 @@
   }
   setInterval(function () { if (!document.hidden && !dlg) refresh(); }, 8000);
 
+  /* ---- 회차 날짜: 요일 줄(SAT · 토요일)을 날짜 숫자(11.14)의 왼쪽·오른쪽 잉크 끝에 정확히 맞춤 ----
+     글자 상자가 아니라 실제로 칠해진 부분(잉크)의 경계를 재서, 요일 줄의 글자 간격과 위치를 조절 */
+  var _cv = document.createElement("canvas").getContext("2d");
+  function fontOf(el) { var c = getComputedStyle(el); return c.fontStyle + " " + c.fontWeight + " " + c.fontSize + " " + c.fontFamily; }
+  function ink(el) {   // 요소 글자의 잉크 왼쪽·오른쪽 (화면 좌표)
+    var t = el.textContent, cs = getComputedStyle(el), ls = parseFloat(cs.letterSpacing) || 0;
+    var rg = document.createRange(); rg.selectNodeContents(el); var r = rg.getBoundingClientRect();
+    _cv.font = fontOf(el);
+    var f = _cv.measureText(t.charAt(0)), l = _cv.measureText(t.charAt(t.length - 1));
+    var lsb = -f.actualBoundingBoxLeft, rsb = l.width - l.actualBoundingBoxRight;
+    return { left: r.left + lsb, right: r.right - ls - rsb, ls: ls, n: t.length };
+  }
+  function alignDates() {
+    var rows = [];
+    document.querySelectorAll("#shows .date").forEach(function (d) {
+      var num = d.querySelector(".d-num"), sm = d.querySelector("small"); if (!num || !sm) return;
+      sm.style.letterSpacing = sm.style.fontSize = sm.style.transform = "";
+      rows.push({ num: num, sm: sm });
+    });
+    if (!rows.length) return;
+    // 1) 모든 회차의 요일 줄을 같은 글자 크기로: 가장 넓은 줄도 자간을 너무 좁히지 않고 들어가는 크기 하나
+    var base = parseFloat(getComputedStyle(rows[0].sm).fontSize), size = base;
+    rows.forEach(function (r) {
+      var a = ink(r.num), b = ink(r.sm), target = a.right - a.left, natural = b.right - b.left;
+      var minLs = -0.08 * base;                                   // 이보다 좁히면 글자가 붙어 보임
+      var widthAtMin = natural + (b.n - 1) * (minLs - b.ls);
+      if (widthAtMin > target) size = Math.min(size, base * target / widthAtMin);
+    });
+    rows.forEach(function (r) { r.sm.style.fontSize = size.toFixed(2) + "px"; });
+    // 2) 줄마다 자간만 조절해 날짜 숫자 좌우 끝에 정확히 맞춤
+    rows.forEach(function (r) {
+      var a = ink(r.num), b = ink(r.sm);
+      var ls = b.ls + ((a.right - a.left) - (b.right - b.left)) / (b.n - 1);
+      r.sm.style.letterSpacing = ls.toFixed(3) + "px";
+      var b2 = ink(r.sm);
+      r.sm.style.transform = "translateX(" + (a.left - b2.left).toFixed(2) + "px)";
+    });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(alignDates);
+  addEventListener("resize", alignDates);
+
   /* ---- render ---- */
   function btnState(s) {
     if (state.failed && !state.loaded) return { label: "연결 확인 중", off: true };
     if (!state.loaded) return { label: "불러오는 중", off: true };
     if (mine) return { label: mine.show === s.id ? "예매 완료" : "이미 예매함", off: true };
     if (!isOpen()) return { label: formatOpenLabel(state.openAt), off: true };
-    if (s.soldOut || (typeof s.remaining === "number" && s.remaining <= 0)) return { label: "매진", off: true };
+    if (s.soldOut) return { label: "매진", off: true };   // 잔여석 수는 받지도 보여주지도 않음, 매진 여부만
     return { label: "예매하기", off: false };
   }
   function render() {
@@ -291,33 +369,25 @@
     bn.textContent = state.failed ? "서버에 연결하지 못했습니다. 잠시 후 자동으로 다시 시도합니다." : "";
     var box = $("shows"); box.textContent = "";
     var list = state.shows.length ? state.shows : [
-      { id: "A", date: "11.14", dow: "SAT", dowKo: "토", time: "3PM", remaining: 35, capacity: 35 },
-      { id: "B", date: "11.14", dow: "SAT", dowKo: "토", time: "7PM", remaining: 35, capacity: 35 },
-      { id: "C", date: "11.15", dow: "SUN", dowKo: "일", time: "3PM", remaining: 35, capacity: 35 },
-      { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM", remaining: 35, capacity: 35 }];
+      { id: "A", date: "11.14", dow: "SAT", dowKo: "토", time: "3PM" },
+      { id: "B", date: "11.14", dow: "SAT", dowKo: "토", time: "7PM" },
+      { id: "C", date: "11.15", dow: "SUN", dowKo: "일", time: "3PM" },
+      { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM" }];
     list.forEach(function (s) {
-      var cap = typeof s.capacity === "number" ? s.capacity : 35;
-      var remNum = typeof s.remaining === "number" ? s.remaining : (s.soldOut ? 0 : cap);
       var row = el("div", "row");
       var date = el("div", "date");
       date.appendChild(el("span", "d-num", s.date));
       date.appendChild(el("small", null, s.dow + " · " + s.dowKo + "요일"));
       var time = el("div", "time", s.time);
-      var av = el("div", "avail"), dots = el("div", "dots"); dots.setAttribute("aria-hidden", "true");
-      var tk = Math.max(0, cap - remNum);
-      for (var i = 0; i < cap; i++) dots.appendChild(el("span", i < tk ? "t" : ""));
-      var rem = el("div", "rem");
-      rem.appendChild(el("b", null, state.loaded ? String(remNum) : "–"));
-      rem.appendChild(document.createTextNode("/ " + cap + " 잔여"));
-      av.appendChild(dots); av.appendChild(rem);
       var st = btnState(s);
       var btn = el("button", "btn" + (st.off ? "" : " solid"), st.label); btn.type = "button"; btn.disabled = st.off;
       btn.setAttribute("aria-label", s.date + " " + s.dowKo + "요일 " + s.time + " " + st.label);
       btn.addEventListener("click", function () { openDialog(s); });
-      row.appendChild(date); row.appendChild(time); row.appendChild(av); row.appendChild(btn);
+      row.appendChild(date); row.appendChild(time); row.appendChild(btn);
       box.appendChild(row);
     });
     renderMine();
+    alignDates();
   }
 
   function renderMine() {

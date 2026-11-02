@@ -130,7 +130,7 @@ async function dbGetCountsByShow() {
   return Object.fromEntries(sqliteQueries.countByShow.all().map((r) => [r.show_id, r.n]));
 }
 
-// 2. 공개 회차 정보 (잔여 좌석 및 정원 반환)
+// 2. 공개 회차 정보 (잔여 좌석 수·정원은 보내지 않고 매진 여부만)
 async function showsPublic() {
   const used = await dbGetCountsByShow();
   return SHOWS.map((s) => {
@@ -138,8 +138,6 @@ async function showsPublic() {
     const count = used[s.id] || 0;
     return {
       ...s,
-      capacity: cap,
-      remaining: Math.max(0, cap - count),
       soldOut: count >= cap,
     };
   });
