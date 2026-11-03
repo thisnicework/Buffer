@@ -34,16 +34,18 @@
     return data;
   }
 
-  /* ---- hero: 점 격자 ---- */
+  /* ---- hero 선: 세로 단 계산용 폭(--hw)과 큰 제목 아래 기준선 위치(--tb) ---- */
   (function () {
-    // 점 4열 × 12행. 위치는 기둥 너비/창 높이에 비례 (CSS에서 계산)
-    var xs = [-0.93, -0.31, 0.31, 0.93], box = $("xdots");
-    for (var r = 0; r < 12; r++) for (var c = 0; c < 4; c++) {
-      var d = el("i", "c" + c + (Math.abs(-1.55 + r * 0.282) < 0.62 ? " band" : ""));
-      d.style.setProperty("--cx", xs[c]); d.style.setProperty("--cy", (-1.55 + r * 0.282).toFixed(3));
-      d.style.setProperty("--dl", (r * 0.3).toFixed(1) + "s");   // 위에서 아래로 차례로 깜빡
-      box.appendChild(d);
+    var hero = document.querySelector(".hero"), ttl = document.querySelector(".x-ttl");
+    if (!hero || !ttl) return;
+    function set() {
+      var H = hero.getBoundingClientRect(), T = ttl.getBoundingClientRect();
+      var gap = innerWidth <= 700 ? 10 : 16;
+      hero.style.setProperty("--hw", hero.clientWidth + "px");
+      hero.style.setProperty("--tb", Math.round(T.bottom - H.top + gap) + "px");
     }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(set);
+    addEventListener("load", set); addEventListener("resize", set); set();
   })();
 
   /* ---- 모바일: 로고 창(과 기둥·점·회차 표시)을 화면 세로 정중앙에 ----
@@ -104,7 +106,7 @@
       var size = Infinity;
       ps.forEach(function (p) { p.style.fontSize = ""; });
       ps.forEach(function (p) {
-        var t = p.querySelector(".fit"); if (!t) return;
+        var t = p.querySelector(".fit"); if (!t || !p.clientWidth) return; // 숨겨진 줄(모바일의 BUFFER 버퍼 줄)은 빼고 계산
         var base = parseFloat(getComputedStyle(p).fontSize);
         var rg = document.createRange(); rg.selectNodeContents(t);
         var need = rg.getBoundingClientRect().width, have = p.clientWidth;
@@ -112,15 +114,17 @@
       });
       if (!isFinite(size)) return;
       ps.forEach(function (p) {
-        var t = p.querySelector(".fit"); if (!t) return;
+        var t = p.querySelector(".fit"); if (!t || !p.clientWidth) return;
         p.style.fontSize = size.toFixed(2) + "px";
         t.style.letterSpacing = ""; t.style.marginRight = "";
-        // 남는 폭은 띄어쓰기에 몰지 않고 글자 사이에 고르게 나눔
+        // 남는 폭은 띄어쓰기에 몰지 않고 글자 사이에 고르게 나눔.
+        // 기본 자간은 CSS에 적힌 값을 그대로 읽어 씀(자간을 바꿔도 기둥 밖으로 삐져나오지 않게)
+        var ls0 = parseFloat(getComputedStyle(t).letterSpacing) || 0;
         var rg = document.createRange(); rg.selectNodeContents(t);
         var n = t.textContent.length, extra = p.clientWidth - rg.getBoundingClientRect().width;
         if (n > 1 && extra > 0.5) {
           var d = extra / (n - 1);
-          t.style.letterSpacing = "calc(-.035em + " + d.toFixed(3) + "px)";
+          t.style.letterSpacing = (ls0 + d).toFixed(3) + "px";
           t.style.marginRight = (-d).toFixed(3) + "px";
         }
       });
@@ -143,8 +147,10 @@
   (function () {
     // 1~9: 개인 프로필(세로 4:5), 10: 단체 프로필(가로, 원래 비율 그대로)
     var N = 10, cur = 0, box = $("profiles"), stage = el("div", "pf-stage"), items = [], AR = [];
+    // 개인 프로필 이름 (사진 번호 순서). 빈 칸이면 "Performer 0N"으로 표시
+    var NAMES = ["최승영", "김선율", "이승환", "이봄", "김민", "임세령", "염지원", "김지민", "김수아"];
     for (var i = 1; i <= N; i++) {
-      var grp = i === 10, alt = grp ? "BUFFER 버퍼 퍼포머 단체 프로필" : "BUFFER 버퍼 퍼포머 프로필 " + i;
+      var grp = i === 10, alt = grp ? "BUFFER 버퍼 퍼포머 단체 프로필" : "BUFFER 버퍼 퍼포머 " + (NAMES[i - 1] || "프로필 " + i);
       GALLERY.push({ src: PROFILE(i), alt: alt });
       AR.push(grp ? 14408 / 7707 : 4 / 5);
       var it = el("button", "pf-item"); it.type = "button";
@@ -180,7 +186,7 @@
     box.appendChild(stage); box.appendChild(panel);
 
     function pad2(n) { return (n < 10 ? "0" : "") + n; }
-    function name(k) { return k === 9 ? "Performers · 9" : "Performer " + pad2(k + 1); }
+    function name(k) { return k === 9 ? "Performers · 9" : (NAMES[k] || "Performer " + pad2(k + 1)); }
     function layout() {
       var W = stage.clientWidth, mobile = W < 640, S = 0.82;
       var w = mobile ? W * 0.66 : Math.min(360, W * 0.34), H = w * 1.25, cx0 = mobile ? W / 2 : W * 0.31, gap = w * 0.27;
@@ -204,7 +210,7 @@
         it.style.opacity = show ? 1 : 0; it.style.visibility = show ? "visible" : "hidden";
         it.style.zIndex = 5 - Math.abs(o);
         it.classList.toggle("on", o === 0); it.tabIndex = o === 0 ? 0 : -1;
-        it.setAttribute("aria-label", (k === 9 ? "퍼포머 단체 프로필" : "퍼포머 프로필 " + (k + 1)) + (o === 0 ? " 크게 보기" : " 보기"));
+        it.setAttribute("aria-label", (k === 9 ? "퍼포머 단체 프로필" : "퍼포머 " + (NAMES[k] || "프로필 " + (k + 1))) + (o === 0 ? " 크게 보기" : " 보기"));
       });
       prev.style.top = next.style.top = Math.round(H / 2) + "px";
       if (mobile) { prev.style.left = "0px"; next.style.left = (W - 44) + "px"; }
@@ -394,7 +400,7 @@
     var z = $("mineZone"), box = $("mine"); z.hidden = false; box.textContent = "";
     if (!mine) {
       // 안내 문구는 입력칸 폭(420px)에 묶이지 않게 폼 밖에 두어 한 줄로
-      var note = el("p", "notice", "이미 예매하셨다면 이름과 전화번호로 예매 내역을 확인할 수 있습니다. 예매 취소는 인스타그램 문의로만 가능합니다.");
+      var note = el("p", "notice", "이미 예매하셨다면 이름과 전화번호로 예매 내역을 확인할 수 있습니다.");
       note.style.maxWidth = "none"; note.style.marginTop = "0"; box.appendChild(note);
       var f = el("form"); f.style.maxWidth = "420px"; f.noValidate = true;
       function field(id, lab, ph, mode) { var l = el("label", "field"); l.htmlFor = id; l.appendChild(el("span", null, lab)); var i = el("input"); i.id = id; i.type = "text"; i.placeholder = ph; if (mode) i.inputMode = mode; l.appendChild(i); f.appendChild(l); return i; }
@@ -404,6 +410,10 @@
       var err = el("div", "err", lookupErr); err.setAttribute("role", "alert"); f.appendChild(err);
       var go = el("button", "btn", lookupBusy ? "확인 중" : "예매 확인"); go.type = "submit"; go.disabled = lookupBusy; go.style.marginTop = "6px";
       f.appendChild(go);
+      // 예매 확인 버튼 바로 아래: 예매 취소 문의 (인스타그램)
+      var cq = el("p", "cancel-q"); cq.appendChild(document.createTextNode("예매 취소는 인스타그램 문의로만 가능합니다. "));
+      var cqa = el("a", null, "취소 문의하기 ↗"); cqa.href = "https://www.instagram.com/sfumato.kr/"; cqa.target = "_blank"; cqa.rel = "noopener";
+      cqa.setAttribute("aria-label", "인스타그램에서 예매 취소 문의하기 (새 창)"); cq.appendChild(cqa); f.appendChild(cq);
       f.addEventListener("submit", async function (e) {
         e.preventDefault(); if (lookupBusy) return;
         var nameVal = nm.value.trim();
