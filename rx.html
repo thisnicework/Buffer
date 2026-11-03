@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>RX</title>
+<style>
+:root{
+  --paper:#fff;
+  --pp:rgba(246,247,245,.24);
+  --pp-edge:rgba(150,156,154,.45);
+  --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 .5 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
+
+.stage{
+  --w:min(520px,80vw,calc((100svh - 60px) / 2.3));
+  --h:calc(var(--w) * 900 / 696);
+  --pad:calc(var(--w) * .03);
+  --bw:calc(var(--w) + var(--pad) * 2);
+  --bh:calc(var(--h) + var(--pad) * 2);
+  --mm:calc(var(--w) / 41.9);
+  --bd:calc(var(--mm) * 18);
+  --stand:calc(var(--mm) * 11.2);
+  --t:calc(var(--w) * .014);
+  position:relative;
+  width:var(--bw);height:calc(var(--bh) + var(--mm) * 40); /* room above for the button cap and the click text */
+  perspective:5000px;
+  perspective-origin:50% calc(50% + var(--mm) * 7); /* follow .rot so the case front face stays aligned */
+}
+.rot,.box,.board{position:absolute;left:0;top:0;width:0;height:0;transform-style:preserve-3d}
+.rot{left:50%;top:calc(50% + var(--mm) * 7)}
+
+.face{
+  position:absolute;
+  background:var(--grain),linear-gradient(160deg,rgba(255,255,255,.1),rgba(235,238,236,.04) 60%,rgba(255,255,255,.12)),var(--pp);
+  border:1px solid var(--pp-edge);
+  box-shadow:inset 0 0 calc(var(--w) * .05) rgba(255,255,255,.55);
+}
+.f-front,.f-back{border-radius:calc(var(--w) * .035)}
+
+.lid{
+  position:absolute;top:0;bottom:0;right:calc(var(--pad) * .55);width:0;
+  border-left:1px solid rgba(120,126,124,.4);border-right:1px solid rgba(255,255,255,.7);
+}
+.latch{
+  position:absolute;top:50%;right:calc(var(--bw) * -.04);
+  width:calc(var(--bw) * .04);height:calc(var(--bh) * .13);margin-top:calc(var(--bh) * -.065);
+  background:var(--grain),var(--pp);border:1px solid var(--pp-edge);border-left:0;
+  border-radius:0 calc(var(--w) * .012) calc(var(--w) * .012) 0;
+}
+.shadow{
+  position:absolute;left:50%;top:calc(50% + var(--mm) * 7);pointer-events:none;
+  width:calc(var(--bw) * .96);height:calc(var(--bh) * .96);
+  margin:calc(var(--bh) * -.48 + var(--w) * .035) 0 0 calc(var(--bw) * -.48);
+  border-radius:calc(var(--w) * .04);
+  box-shadow:0 calc(var(--w) * .03) calc(var(--w) * .09) rgba(40,46,44,.28);
+}
+.f-front,.f-back{width:var(--bw);height:var(--bh);margin:calc(var(--bh) / -2) 0 0 calc(var(--bw) / -2)}
+.f-front{transform:translateZ(calc(var(--bd) / 2))}
+.f-back{transform:rotateY(180deg) translateZ(calc(var(--bd) / 2))}
+.f-left,.f-right{width:var(--bd);height:var(--bh);margin:calc(var(--bh) / -2) 0 0 calc(var(--bd) / -2)}
+.f-right{transform:rotateY(90deg) translateZ(calc(var(--bw) / 2))}
+.f-left{transform:rotateY(-90deg) translateZ(calc(var(--bw) / 2))}
+.f-top,.f-bottom{width:var(--bw);height:var(--bd);margin:calc(var(--bd) / -2) 0 0 calc(var(--bw) / -2)}
+.f-top{transform:rotateX(90deg) translateZ(calc(var(--bh) / 2))}
+.f-bottom{transform:rotateX(-90deg) translateZ(calc(var(--bh) / 2))}
+
+.board{transform:translateZ(calc(var(--bd) / -2 + var(--stand)))}
+.pcb{
+  position:absolute;width:var(--w);height:var(--h);
+  margin:calc(var(--h) / -2) 0 0 calc(var(--w) / -2);
+  clip-path:polygon(0 0,85.9% 0,85.9% 58%,100% 58%,100% 100%,0 100%);
+}
+.pcb.top{background:url(/assets/rx/board.png) center/100% 100% no-repeat}
+.pcb.core{background:#0e2613}
+.pcb.back{background:#0b1f10}
+
+/* 0.96" 128x64 OLED module: glass + FPC laid flat toward the board-edge connector */
+.ov{
+  position:absolute;width:var(--w);height:var(--h);
+  margin:calc(var(--h) / -2) 0 0 calc(var(--w) / -2);
+  pointer-events:none;
+}
+.ov svg{display:block;width:100%;height:100%;overflow:visible}
+.ov.fpc{transform:translateZ(calc(var(--w) * .008))}
+.ov.g0{transform:translateZ(calc(var(--w) * .012))}
+.ov.g1{transform:translateZ(calc(var(--w) * .017))}
+.ov.g2{transform:translateZ(calc(var(--w) * .022))}
+.ov.g3{transform:translateZ(calc(var(--w) * .027))}
+.ov.glass{transform:translateZ(calc(var(--w) * .032))}
+/* push button: one pre-drawn SVG layer just behind the board (cheap on phones); only the cap+plunger move */
+.ov.btn2{transform:translateZ(calc(var(--t) * -1 - var(--mm) * .2))}
+.ov.btn2 #press{pointer-events:auto;cursor:pointer;transition:transform .16s cubic-bezier(.3,1.25,.5,1)}
+.ov.btn2 #press.down{transform:translateY(20px);transition:transform .08s ease-in} /* 1.2 mm of travel */
+
+/* number from the picker, lit on the OLED's active area (x 16..222, y 26..400), centred.
+   Slight blur + softened glow: it is seen through the frosted case lid */
+.oled-num{
+  position:absolute;left:calc(16 / 696 * 100%);top:calc(26 / 900 * 100%);
+  width:calc(206 / 696 * 100%);height:calc(374 / 900 * 100%);
+  display:flex;align-items:center;justify-content:center;pointer-events:none;
+  font:400 calc(var(--w) * .228)/1 "Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;color:#eef3f8;
+  text-shadow:0 0 calc(var(--w) * .006) rgba(235,242,255,.7),0 0 calc(var(--w) * .02) rgba(220,232,255,.3);
+  filter:blur(.6px);opacity:.88;
+}
+.oled-line{display:flex;flex-direction:column;align-items:center;white-space:nowrap;font-size:.72em} /* chapter 3 stack: sized so "C#4" fits the panel width */
+.oled-fit{display:inline-block;line-height:1;white-space:nowrap} /* size and centring set by fitText() */
+.oled-n,.oled-note{line-height:1}
+.oled-note{letter-spacing:-.02em} /* note name, same height as the number */
+/* gap to the number is set in script from each glyph's measured ink, so ● △ □ sit the same distance below it */
+.oled-shape{font-size:.8em;line-height:1;letter-spacing:0}
+.oled-shape.tri{} /* the △ glyph draws much larger than ● and □; shrink it to match */ /* under the number, both centred */
+/* text shown above the case, centred, when the button is clicked */
+@font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}
+.oled-msg{
+  position:absolute;left:0;right:0;top:calc(var(--mm) * 2);z-index:5;
+  text-align:center;
+  font:400 20px/1 "Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:-.03em; /* tracking -30 */
+  word-spacing:normal;
+  color:#0A0B0C;
+  opacity:0;pointer-events:none;
+}
+/* iOS look: same grey rounded pill as the number picker */
+.oled-msg-pill{display:inline-block;padding:8px 16px;border-radius:10px;background:rgba(118,118,128,.12)}
+/* number picker 1-40, top-right (independent of the board): a trigger that drops down an iOS-style wheel */
+.picker{
+  position:fixed;z-index:10;
+  top:calc(16px + env(safe-area-inset-top, 0px));right:max(16px, env(safe-area-inset-right, 0px));
+  font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:-.03em;color:#0A0B0C;
+}
+/* iOS compact picker look: grey rounded pill, value turns blue while the wheel is open */
+.picker-trigger{
+  display:flex;align-items:center;justify-content:center;min-width:52px;
+  padding:7px 12px;border:0;border-radius:8px;background:rgba(118,118,128,.12);color:inherit;cursor:pointer;
+  font:400 17px/1.2 "Helvetica Neue",Helvetica,Arial,sans-serif;
+  letter-spacing:normal;font-variant-numeric:tabular-nums;
+  transition:color .15s ease,background-color .15s ease;
+}
+.picker-trigger:active{background:rgba(118,118,128,.2)}
+.picker.open .picker-trigger{color:#007AFF}
+.picker-trigger:focus-visible,.picker-done:focus-visible,.picker-wheel:focus-visible{outline:2px solid #0A0B0C;outline-offset:2px}
+.picker-panel{
+  position:absolute;top:calc(100% + 6px);right:0;width:168px;
+  background:#fff;border:1px solid #D9DCDE;border-radius:14px;box-shadow:0 12px 32px rgba(10,11,12,.16);
+  overflow:hidden;transform-origin:top right;
+  opacity:0;transform:translateY(-6px) scaleY(.4);visibility:hidden;
+  transition:opacity .18s ease,transform .26s cubic-bezier(.2,.9,.3,1),visibility 0s .26s;
+}
+.picker.open .picker-panel{opacity:1;transform:none;visibility:visible;transition:opacity .18s ease,transform .26s cubic-bezier(.2,.9,.3,1)}
+.picker-view{position:relative;height:180px}
+.picker-band{position:absolute;left:8px;right:8px;top:72px;height:36px;border-radius:8px;background:#EEF0F0;pointer-events:none}
+.picker-wheel{
+  position:relative;height:180px;margin:0;padding:72px 0;list-style:none;box-sizing:border-box;
+  overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none;
+  perspective:400px;
+  -webkit-mask-image:linear-gradient(transparent,#000 32%,#000 68%,transparent);
+  mask-image:linear-gradient(transparent,#000 32%,#000 68%,transparent);
+}
+.picker-wheel::-webkit-scrollbar{display:none}
+.picker-wheel li{
+  height:36px;line-height:36px;text-align:center;scroll-snap-align:center;cursor:pointer;
+  font-size:20px;font-variant-numeric:tabular-nums;color:#0A0B0C;transform-origin:center;
+}
+.picker-done{
+  display:block;width:100%;padding:11px 0;border:0;border-top:1px solid #E4E6E8;background:#fff;cursor:pointer;
+  font:400 15px/1 "Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:-.03em;color:#0A0B0C;
+}
+.picker-wheel li.taken{color:#C2C6CA;text-decoration:line-through;text-decoration-thickness:1px} /* held by another phone */
+.picker-done:disabled{color:#A3A8AD;cursor:default}
+@media (prefers-reduced-motion:reduce){.picker-panel,.picker-trigger{transition:none}}
+/* pop on, hold, pop off: no fades. When the animation ends the pill drops straight back to opacity 0 */
+.oled-msg.show{animation:oled-msg 1s linear}
+@keyframes oled-msg{
+  0%,100%{opacity:1}
+}
+.ov.ant-b{transform:translateZ(calc(var(--w) * .03))}
+.ov.ant-f{transform:translateZ(calc(var(--w) * .062))}
+.ov.ant-s{transform:translateZ(calc(var(--w) * .004))}
+.ov .edge{
+  position:absolute;left:calc(10 / 696 * 100%);top:calc(20 / 900 * 100%);
+  width:calc(260 / 696 * 100%);height:calc(385 / 900 * 100%);
+  background:rgba(60,62,64,.35);border:1px solid rgba(150,154,156,.4);border-radius:calc(var(--w) * .004);
+}
+</style>
+</head>
+<body>
+  <div class="stage" role="img" aria-label="LaNA RX 보드">
+    <div class="shadow"></div>
+    <div class="rot" id="rot">
+      <div class="board">
+        <div class="pcb back" style="transform:translateZ(calc(var(--t) * -1))"></div>
+        <div class="pcb top"></div>
+
+        <div class="ov fpc">
+          <svg viewBox="0 0 696 900" aria-hidden="true">
+            <defs>
+              <linearGradient id="fx" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#d8a21c"/><stop offset="1" stop-color="#e0ab22"/>
+              </linearGradient>
+            </defs>
+            <path d="M262 146 L411 146 L439 94 L574 94 L574 329 L437 329 L411 274 L262 274 Z"
+                  fill="url(#fx)" fill-opacity=".9" stroke="#8a5a0a" stroke-opacity=".7" stroke-width="1"/>
+            <g id="tr" fill="none" stroke="#9a6406" stroke-opacity=".75" stroke-width="1.1"></g>
+            <rect x="505" y="94" width="69" height="235" fill="#0a0a0b" fill-opacity=".96"/>
+            <rect x="505" y="94" width="69" height="235" fill="none" stroke="#3a3b3d" stroke-width="1"/>
+            <rect x="262" y="159" width="71" height="96" fill="#050506" fill-opacity=".96"/>
+            <circle cx="447" cy="105" r="4" fill="#fff" fill-opacity=".85" stroke="#8a5a0a" stroke-width=".8"/>
+            <circle cx="453" cy="318" r="4" fill="#fff" fill-opacity=".85" stroke="#8a5a0a" stroke-width=".8"/>
+          </svg>
+        </div>
+
+        <div class="ov g0"><div class="edge"></div></div>
+        <div class="ov g1"><div class="edge"></div></div>
+        <div class="ov g2"><div class="edge"></div></div>
+        <div class="ov g3"><div class="edge"></div></div>
+        <div class="ov glass">
+          <svg viewBox="0 0 696 900" aria-hidden="true">
+            <defs>
+              <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#fff" stop-opacity=".12"/>
+                <stop offset=".45" stop-color="#fff" stop-opacity="0"/>
+                <stop offset="1" stop-color="#fff" stop-opacity=".05"/>
+              </linearGradient>
+            </defs>
+            <rect x="10" y="20" width="260" height="385" rx="1.5" fill="#101012" fill-opacity=".9" stroke="#a9acab" stroke-opacity=".9" stroke-width="1.6"/>
+            <rect x="16" y="26" width="206" height="374" rx="2" fill="#020203" fill-opacity=".92"/>
+            <rect x="222" y="26" width="46" height="374" fill="#17181a" fill-opacity=".7"/>
+            <rect x="222" y="119" width="46" height="136" fill="#000" fill-opacity=".9"/>
+            <line x1="222" y1="22" x2="222" y2="403" stroke="#8d9091" stroke-opacity=".6" stroke-width="1.2"/>
+            <rect x="10" y="20" width="260" height="385" rx="1.5" fill="url(#sheen)"/>
+          </svg>
+          <div class="oled-num" id="oled-num" aria-live="polite"></div>
+        </div>
+
+        <!-- 3.5 cm silver spring antenna, pin in the yellow-ring pad, lying along the board notch (~16 px/mm) -->
+        <div class="ov ant-s">
+          <svg viewBox="0 0 696 900" aria-hidden="true">
+            <defs><filter id="blur"><feGaussianBlur stdDeviation="5"/></filter></defs>
+            <rect x="602" y="0" width="86" height="560" rx="40" fill="#000" fill-opacity=".3" filter="url(#blur)" transform="translate(9 12)"/>
+          </svg>
+        </div>
+        <div class="ov ant-b">
+          <svg viewBox="0 0 696 900" aria-hidden="true">
+            <defs>
+              <linearGradient id="wireB" gradientUnits="userSpaceOnUse" x1="599" y1="0" x2="691" y2="0">
+                <stop offset="0" stop-color="#555b60"/><stop offset=".5" stop-color="#9aa1a6"/><stop offset="1" stop-color="#555b60"/>
+              </linearGradient>
+            </defs>
+            <g id="ant-back" fill="none" stroke-linecap="round" stroke-linejoin="round"></g>
+          </svg>
+        </div>
+        <div class="ov ant-f">
+          <svg viewBox="0 0 696 900" aria-hidden="true">
+            <defs>
+              <linearGradient id="wire" gradientUnits="userSpaceOnUse" x1="599" y1="0" x2="691" y2="0">
+                <stop offset="0" stop-color="#5d6469"/><stop offset=".28" stop-color="#f1f3f5"/><stop offset=".5" stop-color="#c3c9cd"/><stop offset=".78" stop-color="#8d949a"/><stop offset="1" stop-color="#4b5156"/>
+              </linearGradient>
+            </defs>
+            <path d="M645 571 L645 551" stroke="#3c4247" stroke-width="5.6" stroke-linecap="round" fill="none"/>
+            <path d="M645 571 L645 551" stroke="#c9ced2" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+            <g id="ant-front" fill="none" stroke-linecap="round" stroke-linejoin="round"></g>
+          </svg>
+        </div>
+        <div class="ov btn2"><svg id="btn-svg" viewBox="0 0 696 900" aria-hidden="true"></svg></div>
+      </div>
+      <div class="box">
+        <div class="face f-back"></div>
+        <div class="face f-left"></div>
+        <div class="face f-right"></div>
+        <div class="face f-bottom"></div>
+        <div class="face f-top"></div>
+        <div class="face f-front"><div class="lid"></div><div class="latch"></div></div>
+      </div>
+    </div>
+    <div class="oled-msg" id="oled-msg" aria-live="polite"><span class="oled-msg-pill">CLICK</span></div>
+  </div>
+<div class="picker" id="picker">
+  <button type="button" class="picker-trigger" id="picker-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="picker-wheel">
+    <span id="picker-value">번호</span>
+  </button>
+  <div class="picker-panel">
+    <div class="picker-view">
+      <div class="picker-band"></div>
+      <ul class="picker-wheel" id="picker-wheel" role="listbox" tabindex="0" aria-label="번호 선택"></ul>
+    </div>
+    <button type="button" class="picker-done" id="picker-done">완료</button>
+  </div>
+</div>
+<script>
+// number picker: tap the trigger, a wheel drops down; scroll (snaps to rows) or tap a row to choose.
+// Numbers are one-per-phone: ones other people hold are greyed out live and can't be confirmed.
+(() => {
+  const ROW = 36, MAX = 40;
+  const root = document.getElementById("picker");
+  const trigger = document.getElementById("picker-trigger");
+  const label = document.getElementById("picker-value");
+  const wheel = document.getElementById("picker-wheel");
+  const done = document.getElementById("picker-done");
+  let value = 1, settle, committed = null, taken = new Set(), busy = false;
+
+  for (let i = 1; i <= MAX; i++) {
+    const li = document.createElement("li");
+    li.textContent = String(i).padStart(2, "0"); // 01~09 match the two-digit numbers
+    li.setAttribute("role", "option");
+    li.id = "picker-opt-" + i;
+    wheel.appendChild(li);
+  }
+  const items = [...wheel.children];
+  const isOpen = () => root.classList.contains("open");
+
+  // curve the rows like a drum: tilt and fade with distance from the centre band
+  const paint = () => {
+    const mid = wheel.scrollTop / ROW;
+    items.forEach((li, i) => {
+      const d = Math.max(-3, Math.min(3, i - mid));
+      li.style.transform = `rotateX(${(-d * 22).toFixed(1)}deg)`;
+      li.style.opacity = (1 - Math.abs(d) * .26).toFixed(2);
+    });
+  };
+  const two = (n) => String(n).padStart(2, "0");
+  const showLabel = () => { label.textContent = isOpen() ? two(value) : committed ? two(committed) : "번호"; };
+  const refreshDone = (msg) => {
+    const blocked = taken.has(value);
+    done.disabled = blocked || busy;
+    done.textContent = msg || (blocked ? "이미 선택된 번호예요" : "완료");
+  };
+  const select = (v) => {
+    value = Math.max(1, Math.min(MAX, v));
+    showLabel();
+    items.forEach((li, i) => li.setAttribute("aria-selected", String(i + 1 === value)));
+    wheel.setAttribute("aria-activedescendant", "picker-opt-" + value);
+    refreshDone();
+  };
+  const scrollTo = (v, smooth) => wheel.scrollTo({ top: (v - 1) * ROW, behavior: smooth ? "smooth" : "auto" });
+
+  wheel.addEventListener("scroll", () => {
+    requestAnimationFrame(paint);
+    clearTimeout(settle);
+    settle = setTimeout(() => select(Math.round(wheel.scrollTop / ROW) + 1), 90);
+  }, { passive: true });
+  wheel.addEventListener("click", (e) => {
+    const li = e.target.closest("li");
+    if (li) scrollTo(items.indexOf(li) + 1, true);
+  });
+  wheel.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      scrollTo(value + (e.key === "ArrowDown" ? 1 : -1), true);
+    } else if (e.key === "Enter") confirm();
+  });
+
+  const open = () => {
+    root.classList.add("open");
+    trigger.setAttribute("aria-expanded", "true");
+    if (committed) value = committed;
+    scrollTo(value, false);
+    select(value);
+    paint();
+    wheel.focus({ preventScroll: true });
+  };
+  const close = () => {
+    clearTimeout(settle);
+    root.classList.remove("open");
+    trigger.setAttribute("aria-expanded", "false");
+    showLabel();
+  };
+  // "완료": ask the server for the number; only a confirmed number goes on the OLED
+  async function confirm() {
+    if (!isOpen() || busy) return;
+    clearTimeout(settle);
+    select(Math.round(wheel.scrollTop / ROW) + 1); // take the row in the band even if the wheel hasn't settled
+    if (taken.has(value)) return;
+    busy = true; refreshDone("확인 중…");
+    const r = await window.rxClaim(value);
+    busy = false;
+    if (r.ok) {
+      committed = value;
+      window.rxSetNumber(committed);
+      close();
+      trigger.focus();
+    } else {
+      refreshDone(r.message || "다시 시도해 주세요");
+    }
+  }
+
+  trigger.addEventListener("click", () => (isOpen() ? close() : open()));
+  done.addEventListener("click", confirm);
+  document.addEventListener("pointerdown", (e) => { if (!root.contains(e.target)) close(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  // called by the show script: numbers held by other phones, and this phone's own number
+  window.rxPicker = {
+    setTaken(list, mine) {
+      taken = new Set(list.filter((n) => n !== mine));
+      items.forEach((li, i) => {
+        const t = taken.has(i + 1);
+        li.classList.toggle("taken", t);
+        li.setAttribute("aria-disabled", String(t));
+      });
+      if (isOpen()) refreshDone();
+    },
+    setCommitted(n) { committed = n; if (n) value = n; showLabel(); },
+  };
+
+  select(1);
+  showLabel();
+  paint();
+})();
+</script>
+<script>
+// FPC traces: 30 lines fanning from the neck out to the contact pads
+(() => {
+  const g = document.getElementById("tr"), ns = "http://www.w3.org/2000/svg";
+  for (let i = 0; i < 30; i++) {
+    const y0 = 156 + i * (110 / 29), y1 = 104 + i * (215 / 29);
+    const p = document.createElementNS(ns, "path");
+    p.setAttribute("d", `M333 ${y0.toFixed(1)} H405 L${(432 + Math.abs(i - 14.5) * .2).toFixed(1)} ${y1.toFixed(1)} H505`);
+    g.appendChild(p);
+  }
+  // spring antenna: true helix projected top-down. ~16.6 px/mm (QFP 0.5 mm lead pitch = ~8.3 px)
+  // 5.6 mm coil diameter, 1.07 mm pitch, 31.5 turns, pin into the pad at (645,571)
+  const f = document.getElementById("ant-front"), b = document.getElementById("ant-back");
+  const cx = 645, R = 46, y0 = 552, pitch = 17.8, turns = 31.5, step = Math.PI / 16;
+  const mk = (pts, attrs) => {
+    const el = document.createElementNS(ns, "path");
+    el.setAttribute("d", "M" + pts.map((q) => q[0].toFixed(1) + " " + q[1].toFixed(1)).join(" L"));
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  };
+  let seg = [], front = null;
+  const flush = () => {
+    if (seg.length < 2) { seg = []; return; }
+    if (front) {
+      f.appendChild(mk(seg, { stroke: "#3c4247", "stroke-width": 11.5 }));
+      f.appendChild(mk(seg, { stroke: "url(#wire)", "stroke-width": 8.5 }));
+      f.appendChild(mk(seg.map((q) => [q[0], q[1] - 2.3]), { stroke: "#fff", "stroke-opacity": .6, "stroke-width": 1.8 }));
+    } else {
+      b.appendChild(mk(seg, { stroke: "#2f3438", "stroke-width": 9 }));
+      b.appendChild(mk(seg, { stroke: "url(#wireB)", "stroke-width": 6.5 }));
+    }
+    seg = [];
+  };
+  for (let t = 0; t <= turns * 2 * Math.PI + 1e-6; t += step) {
+    const s = Math.sin(t), pt = [cx + R * Math.cos(t), y0 - pitch * t / (2 * Math.PI)];
+    const isFront = s >= 0;
+    if (front !== null && isFront !== front) { seg.push(pt); flush(); }
+    front = isFront;
+    seg.push(pt);
+  }
+  flush();
+
+  // push button, pre-drawn as one flat SVG (the page is a fixed front view, so only the silhouette shows).
+  // Board px: 16.61 px/mm, axis x=115, y = -(mm above the board's top edge). Proportions from the photo:
+  // collar 8.85 dia | nut 10 across corners x 1.75 | thread 4.2 dia, 3 crests | flare 3.4 -> 2.2 | plunger 2.2 x 2 | cap 4.1 x 2.9
+  const svg = document.getElementById("btn-svg");
+  const PX = 16.61, AX = 115, W = 1.26; // W = case top wall, mm above the board edge
+  const Y = (mm) => (-mm * PX).toFixed(1), X = (mm) => (AX + mm * PX).toFixed(1);
+  const RAD = Math.PI / 180, PH = 105;
+  const c = (th, ph = PH) => Math.cos((th - ph) * RAD);
+  const sp = (th, p, ph = PH) => Math.pow(Math.max(0, c(th, ph)), p);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  // a cylinder seen side-on: left edge is theta=180, centre 90, right 0
+  const stops = (L) => Array.from({ length: 25 }, (_, i) => {
+    const u = i / 24, th = Math.acos(clamp(1 - 2 * u, -1, 1)) / RAD; // u=0 -> 0deg? flip so left=180
+    return `<stop offset="${u.toFixed(3)}" stop-color="hsl(210 6% ${L(180 - th).toFixed(1)}%)"/>`;
+  }).join("");
+  const chromeL = (th) => clamp(36 + 14 * c(th) + 50 * sp(th, 40) + 14 * sp(th, 6) - 24 * sp(th, 18, 55) - 16 * sp(th, 18, 150) + 22 * sp(th, 10, 18) + 16 * sp(th, 10, 172), 12, 98);
+  const glossL = (th) => clamp(7 + 7 * c(th) + 48 * sp(th, 26), 3, 80);
+  const grooves = [0, 1, 2].map((k) => { const s0 = W + 1.8 + k * .68; return [s0, s0 + .3, s0 + .6]; });
+  // thread silhouette with notched crests
+  let thr = `M${X(-1.85)} ${Y(W + 1.75)}`;
+  for (const [a, m, b] of grooves) thr += ` L${X(-1.85)} ${Y(a)} L${X(-2.1)} ${Y(m)} L${X(-1.85)} ${Y(b)}`;
+  thr += ` L${X(-1.85)} ${Y(W + 3.8)} L${X(1.85)} ${Y(W + 3.8)}`;
+  for (const [a, m, b] of grooves.slice().reverse()) thr += ` L${X(1.85)} ${Y(b)} L${X(2.1)} ${Y(m)} L${X(1.85)} ${Y(a)}`;
+  thr += ` L${X(1.85)} ${Y(W + 1.75)} Z`;
+  const NR = 5.0; // nut circumradius; flat face toward the viewer spans -R/2..R/2
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="chr" x1="0" y1="0" x2="1" y2="0">${stops(chromeL)}</linearGradient>
+      <linearGradient id="blk" x1="0" y1="0" x2="1" y2="0">${stops(glossL)}</linearGradient>
+      <linearGradient id="capTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".35"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
+      <linearGradient id="nutFace" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="hsl(210 5% 72%)"/><stop offset=".14" stop-color="hsl(210 6% 93%)"/>
+        <stop offset=".5" stop-color="hsl(0 0% 99%)"/><stop offset=".86" stop-color="hsl(210 6% 93%)"/><stop offset="1" stop-color="hsl(210 5% 72%)"/>
+      </linearGradient>
+    </defs>
+    <!-- collar (rounded top), mostly behind the board -->
+    <rect x="${X(-4.42)}" y="${Y(W)}" width="${(8.84 * PX).toFixed(1)}" height="${(W * PX + 12).toFixed(1)}" rx="${(.35 * PX).toFixed(1)}" fill="url(#chr)"/>
+    <!-- hex nut: left face, front face, right face, then chamfer highlights -->
+    <rect x="${X(-NR)}" y="${Y(W + 1.75)}" width="${(NR / 2 * PX).toFixed(1)}" height="${(1.75 * PX).toFixed(1)}" fill="hsl(210 4% 60%)"/>
+    <rect x="${X(NR / 2)}" y="${Y(W + 1.75)}" width="${(NR / 2 * PX).toFixed(1)}" height="${(1.75 * PX).toFixed(1)}" fill="hsl(210 4% 48%)"/>
+    <rect x="${X(-NR / 2)}" y="${Y(W + 1.75)}" width="${(NR * PX).toFixed(1)}" height="${(1.75 * PX).toFixed(1)}" fill="url(#nutFace)"/>
+    <rect x="${X(-NR)}" y="${Y(W + 1.75)}" width="${(2 * NR * PX).toFixed(1)}" height="2.2" fill="#fff" fill-opacity=".45"/>
+    <rect x="${X(-NR)}" y="${(+Y(W) - 2.2).toFixed(1)}" width="${(2 * NR * PX).toFixed(1)}" height="2.2" fill="#000" fill-opacity=".25"/>
+    <!-- threaded bushing + top ring -->
+    <path d="${thr}" fill="url(#chr)"/>
+    ${grooves.map(([a]) => `<line x1="${X(-1.85)}" x2="${X(1.85)}" y1="${Y(a + .02)}" y2="${Y(a + .02)}" stroke="#000" stroke-opacity=".45" stroke-width="2"/>`).join("")}
+    <rect x="${X(-1.75)}" y="${Y(W + 3.95)}" width="${(3.5 * PX).toFixed(1)}" height="${(.15 * PX).toFixed(1)}" fill="url(#chr)"/>
+    <!-- concave flare -->
+    <path d="M${X(-1.7)} ${Y(W + 3.95)} C${X(-1.25)} ${Y(W + 4.4)} ${X(-1.1)} ${Y(W + 5)} ${X(-1.1)} ${Y(W + 5.6)}
+             L${X(1.1)} ${Y(W + 5.6)} C${X(1.1)} ${Y(W + 5)} ${X(1.25)} ${Y(W + 4.4)} ${X(1.7)} ${Y(W + 3.95)} Z" fill="url(#chr)"/>
+    <!-- plunger + cap: the part that moves -->
+    <g id="press" class="press">
+      <rect x="${X(-1.1)}" y="${Y(W + 7.6)}" width="${(2.2 * PX).toFixed(1)}" height="${(2.1 * PX).toFixed(1)}" fill="url(#chr)"/>
+      <rect x="${X(-2.05)}" y="${Y(W + 10.45)}" width="${(4.1 * PX).toFixed(1)}" height="${(2.9 * PX).toFixed(1)}" rx="${(.45 * PX).toFixed(1)}" fill="url(#blk)"/>
+      <rect x="${X(-2.05)}" y="${Y(W + 7.95)}" width="${(4.1 * PX).toFixed(1)}" height="${(.4 * PX).toFixed(1)}" fill="url(#capTop)" transform="rotate(180 ${AX} ${Y(W + 7.75)})"/>
+    </g>`;
+  const press = document.getElementById("press");
+  // click the cap: plunger travels in ~1.2 mm and springs back, and "클릭" flashes on the OLED
+  const msg = document.getElementById("oled-msg");
+  press.addEventListener("click", () => {
+    press.classList.add("down");
+    clearTimeout(press._t);
+    press._t = setTimeout(() => press.classList.remove("down"), 110);
+    document.dispatchEvent(new Event("rx-press")); // the show script decides whether this press makes a sound
+    msg.classList.remove("show");
+    void msg.offsetWidth;
+    msg.classList.add("show");
+  });
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script>
+// Follow the show: /tx sets the mode, every phone's OLED shows what that mode calls for (DEVICE table, 미니패널 column).
+//   1, 5, 6  personal number      2  blank      3, 4  800-second countdown      7  number + its shape
+(() => {
+  const oled = document.getElementById("oled-num");
+  // mode 7: each number gets a small ● △ □ (Helvetica glyphs) beside it, shuffled once with a fixed seed
+  // so a number always shows the same shape. 14 circles, 13 triangles, 13 squares.
+  const SHAPE_OF = [null,
+    "△","□","●","△","●","●","□","□","●","△",
+    "□","●","△","□","△","●","●","□","△","△",
+    "●","□","●","△","●","△","●","●","□","□",
+    "□","△","□","□","△","●","●","△","□","△"];
+  let number = null, state = null, offset = 0, last = null; // number: this phone's confirmed 1~40 (null until chosen)
+
+  const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
+  function paint() {
+    const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
+    // single-line modes fill the panel edge to edge (see fitText); no number yet: the panel stays dark
+    const num = number ? String(number).padStart(2, "0") : ""; // 01~09: same two-digit look as 10~40
+    let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
+    if (mode === 2) html = "";
+    else if ((mode === 3 || mode === 4) && state.timerStartedAtMs) html = `<span class="oled-fit" data-ref="888">${remaining()}</span>`; // sized for the widest 3 digits so it doesn't jump each second
+    else if ((mode === 6 || mode === 7) && number) {
+      // chapter 3, stacked and centred: number / shape (mode 7 only) / note name
+      const shape = mode === 7 ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
+      html = `<span class="oled-line"><span class="oled-n">${num}</span>${shape}<span class="oled-note">${NOTE_OF[number]}</span></span>`;
+    }
+    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); if (mode === 6) fitStack(); else if (mode === 7) centerLines(oled.querySelector(".oled-line")); }
+  }
+
+  // Mode 6 (number over note): grow the whole stack until its widest line's ink spans FILL of the panel
+  // width, capped by the height; alignShape() is rerun so the gaps stay at GAP × number size.
+  function fitStack() {
+    const line = oled.querySelector(".oled-line");
+    if (!line) return;
+    const widest = () => Math.max(...[...line.children].map((el) => {
+      const fs = parseFloat(getComputedStyle(el).fontSize);
+      ink.font = `400 ${fs}px ${getComputedStyle(el).fontFamily}`;
+      const m = ink.measureText(el.textContent);
+      return m.actualBoundingBoxLeft + m.actualBoundingBoxRight - 0.03 * fs * (el.textContent.length - 1);
+    }));
+    const inkHeight = () => {
+      const kids = [...line.children], first = inkBox(kids[0]), lastBox = inkBox(kids[kids.length - 1]);
+      return line.offsetHeight - first.top - (lastBox.fs - lastBox.bottom);
+    };
+    const s = Math.min(oled.offsetWidth * FILL / widest(), oled.offsetHeight * 0.9 / inkHeight());
+    line.style.fontSize = (parseFloat(getComputedStyle(line).fontSize) * s).toFixed(2) + "px";
+    alignShape();
+    centerLines(line);
+  }
+
+  // centre each line by its ink, like fitText, so left and right margins match
+  function centerLines(line) {
+    for (const el of line.children) {
+      const fs = parseFloat(getComputedStyle(el).fontSize), ls = parseFloat(getComputedStyle(el).letterSpacing) || 0;
+      ink.font = `400 ${fs}px ${getComputedStyle(el).fontFamily}`;
+      const m = ink.measureText(el.textContent), n = el.textContent.length;
+      const inkMid = (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2 + ls * (n - 1) / 2;
+      const boxMid = (m.width + ls * n) / 2;
+      el.style.transform = `translateX(${(boxMid - inkMid).toFixed(2)}px)`;
+    }
+  }
+
+  // Fill the panel: scale the text so its ink (not its letter box) spans FILL of the panel width,
+  // capped by the height, and centre the ink itself (digits have uneven side bearings).
+  const FILL = 0.96;
+  function fitText() {
+    const el = oled.querySelector(".oled-fit");
+    if (!el) return;
+    const fam = getComputedStyle(oled).fontFamily, ls = -0.03; // matches .oled-num letter-spacing
+    ink.font = `400 100px ${fam}`;
+    const ref = ink.measureText(el.dataset.ref), cur = ink.measureText(el.textContent);
+    const n = el.dataset.ref.length;
+    const refW = ref.actualBoundingBoxLeft + ref.actualBoundingBoxRight + ls * 100 * (n - 1);
+    const refH = ref.actualBoundingBoxAscent + ref.actualBoundingBoxDescent;
+    const size = Math.min(oled.offsetWidth * FILL / refW, oled.offsetHeight * 0.9 / refH) * 100;
+    el.style.fontSize = size.toFixed(2) + "px";
+    // shift so the ink, not the advance box, is centred
+    const k = size / 100, m = el.textContent.length;
+    const inkMid = (cur.actualBoundingBoxRight - cur.actualBoundingBoxLeft) / 2 + ls * 100 * (m - 1) / 2;
+    const boxMid = (cur.width + ls * 100 * m) / 2;
+    el.style.transform = `translateX(${((boxMid - inkMid) * k).toFixed(2)}px)`;
+  }
+  addEventListener("resize", () => { last = null; paint(); }); // re-fit everything at the new size
+
+  // Each glyph sits at a different height inside its own line box (● low, △ high, letters on a baseline),
+  // so measure the ink with a canvas and set top margins: every item's ink starts GAP below the previous one's.
+  const GAP = 0.3; // × number size
+  const ink = document.createElement("canvas").getContext("2d");
+  function inkBox(el) { // ink top and bottom inside the element's line-height:1 box, in px
+    const fs = parseFloat(getComputedStyle(el).fontSize), fam = getComputedStyle(el).fontFamily;
+    ink.font = `400 ${fs}px ${fam}`;
+    const m = ink.measureText(el.textContent);
+    const base = (fs - m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2 + m.fontBoundingBoxAscent;
+    return { fs, top: base - m.actualBoundingBoxAscent, bottom: base + m.actualBoundingBoxDescent };
+  }
+  function alignShape() {
+    const line = oled.querySelector(".oled-line");
+    if (!line) return;
+    const items = [...line.children];
+    const N = parseFloat(getComputedStyle(items[0]).fontSize);
+    // number, shape and note all get the same ink height: the shape glyph is scaled to the digits' height
+    const H = (() => { const b = inkBox(items[0]); return b.bottom - b.top; })();
+    const shape = line.querySelector(".oled-shape");
+    if (shape) {
+      shape.style.fontSize = "100px";
+      const b = inkBox(shape);
+      shape.style.fontSize = (100 * H / (b.bottom - b.top)).toFixed(2) + "px";
+    }
+    for (let i = 1; i < items.length; i++) {
+      const prev = inkBox(items[i - 1]), cur = inkBox(items[i]);
+      items[i].style.marginTop = (GAP * N - (prev.fs - prev.bottom) - cur.top).toFixed(2) + "px";
+    }
+  }
+  window.rxSetNumber = (n) => { number = n; paint(); };
+
+  // ---- one phone per number: a random id kept on this phone, so a reload keeps the same number ----
+  const CLIENT = (() => {
+    let id = "";
+    try { id = localStorage.getItem("rx-client") || ""; } catch (_) {}
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2));
+      try { localStorage.setItem("rx-client", id); } catch (_) {}
+    }
+    return id;
+  })();
+  const applyClaims = (taken, mine) => {
+    if (mine !== undefined && mine !== number) { number = mine; window.rxPicker.setCommitted(mine); paint(); } // undefined = keep ours
+    window.rxPicker.setTaken(taken, number);
+  };
+  window.rxClaim = async (n) => {
+    try {
+      const r = await fetch("/api/claim", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client: CLIENT, number: n }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (j.taken) window.rxPicker.setTaken(j.taken, r.ok ? n : number);
+      return r.ok ? { ok: true } : { ok: false, message: j.message };
+    } catch (_) {
+      // no server (shared preview link): just keep the number on this phone
+      return { ok: true };
+    }
+  };
+  async function pullClaims() {
+    try {
+      const r = await fetch("/api/claims?client=" + encodeURIComponent(CLIENT), { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      applyClaims(j.taken, j.mine);
+    } catch (_) {}
+  }
+  pullClaims();
+  setInterval(paint, 200);
+
+  async function pull() {
+    try {
+      const t0 = Date.now();
+      const r = await fetch("/api/state", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      offset = j.nowMs - (t0 + Date.now()) / 2; // phone clock vs server clock
+      state = j;
+      paint();
+      syncAnnouncement();
+    } catch (_) { /* offline or no server: keep the last known state */ }
+  }
+
+  // Supabase Realtime pushes changes instantly once show_state / show_claims are set up (supabase-schema.sql 5~11).
+  // A subscription "succeeds" even before that, so polling always stays on as the safety net.
+  try {
+    const sb = window.supabase.createClient("https://qatrsegoqwandtsasunp.supabase.co", "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3", { auth: { persistSession: false } });
+    sb.channel("show_live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "show_state" }, pull)
+      .on("postgres_changes", { event: "*", schema: "public", table: "show_claims" }, pullClaims)
+      .subscribe();
+  } catch (_) {}
+  // Speaker tracks per mode (DEVICE table, 소형스피커 column). Each starts DELAY after /tx switched to that
+  // mode, timed on the server clock so every phone starts together (polling lag doesn't matter); a phone
+  // that arrives late joins mid-track. Switching mode stops the old track; entering a mode starts its track
+  // from the top. Browsers only allow sound after a tap, so the first tap anywhere unlocks it.
+  const TRACKS = {
+    2: { src: "/assets/rx/mode2-announcement.mp3", delay: 3000 }, // 공연 안내 멘트 (최승원.wav)
+    // 파편적인 발화 (김지민.wav up to 61.8 s, cut inside the 61.2–63.3 s speech pause): restarts on entering 4 and again on 5
+    4: { src: "/assets/rx/mode45-voices.mp3", delay: 2000 },
+    5: { src: "/assets/rx/mode45-voices.mp3", delay: 2000 },
+  };
+  const players = {};
+  for (const t of Object.values(TRACKS)) {
+    if (!players[t.src]) { players[t.src] = new Audio(t.src); players[t.src].preload = "auto"; }
+  }
+  const stopAll = () => Object.values(players).forEach((a) => a.pause());
+  let trackKey = null, trackTimer = null;
+  function syncAnnouncement() {
+    const t = state && TRACKS[state.mode];
+    const from = t ? (t.from && state[t.from]) || state.updatedAtMs : null; // when this run began on the server
+    const key = t ? t.src + ":" + from : null;
+    if (key === trackKey) return; // same run as before (e.g. 4 -> 5): keep playing
+    trackKey = key;
+    clearTimeout(trackTimer);
+    stopAll();
+    if (!t) return;
+    const audio = players[t.src], startAt = from + t.delay;
+    const start = () => {
+      const late = (Date.now() + offset - startAt) / 1000;
+      if (audio.duration && late >= audio.duration) return; // it already finished for everyone else
+      try { audio.currentTime = Math.max(0, late); } catch (_) {}
+      audio.play().catch(() => {}); // blocked until the viewer has tapped once
+    };
+    trackTimer = setTimeout(start, Math.max(0, startAt - (Date.now() + offset)));
+  }
+  const unlock = () => {
+    removeEventListener("pointerdown", unlock);
+    Promise.all(Object.values(players).map((a) => {
+      a.muted = true;
+      return a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(() => {}).finally(() => { a.muted = false; });
+    })).then(() => { trackKey = null; syncAnnouncement(); }); // re-arm whatever should be playing now
+  };
+  addEventListener("pointerdown", unlock);
+
+  // instant: the local server pushes every change down /api/stream (the clock offset still comes from pull)
+  try {
+    const es = new EventSource("/api/stream");
+    es.onmessage = (e) => {
+      try { state = JSON.parse(e.data); paint(); syncAnnouncement(); } catch (_) {}
+    };
+    // live list of numbers in use; if ours is gone (/tx reset them all), this phone picks again
+    es.addEventListener("claims", (e) => {
+      try {
+        const { taken } = JSON.parse(e.data);
+        applyClaims(taken, number && !taken.includes(number) ? null : undefined);
+      } catch (_) {}
+    });
+  } catch (_) {}
+
+  setInterval(pull, 2000);
+  setInterval(pullClaims, 4000);
+  pull();
+
+  // Pressing the cap plays this person's note, a short single tone.
+  // 12 notes C4..B4 including the black keys, each used 3 times (C4, D4, F#4, A4 4 times) across 1~40,
+  // shuffled once with a fixed seed so a number always keeps the same note on every phone.
+  const NOTE_OF = [null,
+    "G#4","F4","C4","D#4","B4","F#4","B4","G4","E4","A#4",
+    "D4","C4","F#4","G4","D#4","C#4","G#4","G#4","F4","C4",
+    "F4","A4","D4","E4","D4","C#4","E4","A#4","C#4","A4",
+    "F#4","F#4","A4","G4","C4","A#4","A4","B4","D#4","D4"];
+  const SEMI = { C: 0, "C#": 1, D: 2, "D#": 3, E: 4, F: 5, "F#": 6, G: 7, "G#": 8, A: 9, "A#": 10, B: 11 };
+  const freq = (note) => {
+    const [, name, oct] = /^([A-G]#?)(\d)$/.exec(note);
+    return 440 * Math.pow(2, (SEMI[name] + (+oct + 1) * 12 - 69) / 12);
+  };
+  let ctx = null;
+  function play(note) {
+    try {
+      ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === "suspended") ctx.resume();
+      const t = ctx.currentTime, f = freq(note);
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0, t);
+      out.gain.linearRampToValueAtTime(0.5, t + 0.008);           // quick attack
+      out.gain.exponentialRampToValueAtTime(0.001, t + 0.9);      // short ring-out
+      out.connect(ctx.destination);
+      // a soft bell-like tone: fundamental plus two quieter partials
+      [[1, 1], [2, 0.28], [3, 0.08]].forEach(([k, g]) => {
+        const o = ctx.createOscillator(), og = ctx.createGain();
+        o.type = k === 1 ? "triangle" : "sine";
+        o.frequency.value = f * k;
+        og.gain.value = g;
+        o.connect(og).connect(out);
+        o.start(t);
+        o.stop(t + 0.95);
+      });
+    } catch (_) { /* no audio support: the press still animates */ }
+  }
+  // the cap only sounds in chapter 3 (modes 6, 7); in modes 1~5 the press just animates
+  document.addEventListener("rx-press", () => {
+    const mode = state ? state.mode : 1;
+    if ((mode === 6 || mode === 7) && number) play(NOTE_OF[number]);
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });
+})();
+</script>
+</body>
+</html>

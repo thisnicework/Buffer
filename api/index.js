@@ -98,7 +98,41 @@ async function getJson(req) {
 
 const csvCell = (v) => `"${String(v).replace(/"/g, '""')}"`;
 
+// DEVICE 공연 상태 & 관객 개인번호 (1~40): Supabase show_state / show_claims (supabase-schema.sql 5~11번)
+const TIMER_SECONDS = 800;
+const SHOW_SECRET = ADMIN_TOKEN || "admin1234";
+const validClient = (v) => typeof v === "string" && /^[A-Za-z0-9-]{8,64}$/.test(v);
+
+// SHOW_STATE=local 명시 시에만 메모리 모드로 동작 (로컬/자동화 테스트용). Vercel 운영 환경에서는 항상 Supabase 사용.
+const isStateLocal = () => String(process.env.SHOW_STATE || "").toLowerCase() === "local";
+const memState = { mode: 1, timer_started_at: null, updated_at: new Date().toISOString() };
+const memClaimByNum = new Map();
+const memClaimByClient = new Map();
+const memTakenList = () => [...memClaimByNum.keys()].sort((a, b) => a - b);
+
+function statePayload(row) {
+  const ms = (v) => (v ? new Date(v).getTime() : null);
+  return {
+    mode: row.mode,
+    timerStartedAtMs: ms(row.timer_started_at),
+    updatedAtMs: ms(row.updated_at),
+    timerSeconds: TIMER_SECONDS,
+    nowMs: Date.now(),
+  };
+}
+
+async function readState(res) {
+  if (isStateLocal()) return memState;
+  const { data, error } = await supabase.from("show_state").select("mode, timer_started_at, updated_at").eq("id", 1).maybeSingle();
+  if (error || !data) {
+    send(res, 503, { error: "no_state", message: "show_state 테이블이 없습니다. supabase-schema.sql 을 실행해주세요." });
+    return null;
+  }
+  return data;
+}
+
 async function handler(req, res) {
+  try {
   // CORS Preflight
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -247,7 +281,119 @@ async function handler(req, res) {
     return send(res, 200, { code: row.code, show: row.show_id, name: row.name, phone: row.phone });
   }
 
-  // 4. Admin API
+  // 4. DEVICE 공연 상태 & 관객 개인번호 (/tx 운영 콘솔 · /rx 관객 휴대폰)
+  if (route === "GET /api/stream") {
+    // Vercel Serverless 환경에서는 SSE 장시간 연결 대신 204를 반환하여 EventSource 재연결 루프를 정상 종료하고
+    // Supabase Realtime + 폴링으로 실시간 동기화합니다.
+    res.writeHead(204, { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+    return res.end();
+  }
+
+  if (route === "GET /api/state") {
+    const row = await readState(res);
+    return row && send(res, 200, statePayload(row));
+  }
+
+  if (route === "POST /api/state") {
+    const b = await getJson(req);
+    const mode = Number(b.mode);
+    if (!Number.isInteger(mode) || mode < 1 || mode > 7) {
+      return send(res, 400, { error: "bad_mode", message: "모드는 1~7 중 하나여야 합니다." });
+    }
+    if (isStateLocal()) {
+      const prev = memState.mode;
+      if (mode === 1 || mode === 2) memState.timer_started_at = null;
+      else if (mode === 3 && prev !== 3) memState.timer_started_at = new Date().toISOString();
+      else if (mode === 4 && !memState.timer_started_at) memState.timer_started_at = new Date().toISOString();
+      memState.mode = mode;
+      memState.updated_at = new Date().toISOString();
+      return send(res, 200, statePayload(memState));
+    }
+    const { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
+    if (error) return send(res, 503, { error: "no_state", message: "set_show_mode 함수가 없습니다. supabase-schema.sql 을 실행해주세요." });
+    if (data && data.error === "unauthorized") return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });
+    if (data && data.error) return send(res, 400, { error: data.error });
+    return send(res, 200, statePayload(data));
+  }
+
+  if (route === "GET /api/claims") {
+    const client = url.searchParams.get("client");
+    if (isStateLocal()) {
+      return send(res, 200, {
+        taken: memTakenList(),
+        mine: validClient(client) ? memClaimByClient.get(client) || null : null,
+      });
+    }
+    const { data: rows, error } = await supabase
+      .from("show_claims")
+      .select("num, client_id")
+      .order("num", { ascending: true });
+    if (error) {
+      return send(res, 503, { error: "no_claims", message: "show_claims 테이블이 없습니다. supabase-schema.sql 을 실행해주세요." });
+    }
+    const list = rows || [];
+    const taken = list.map((r) => r.num);
+    const mineRow = validClient(client) ? list.find((r) => r.client_id === client) : null;
+    return send(res, 200, { taken, mine: mineRow ? mineRow.num : null });
+  }
+
+  if (route === "POST /api/claim") {
+    const b = await getJson(req);
+    const number = Number(b.number);
+    if (!validClient(b.client)) return send(res, 400, { error: "client" });
+    if (!Number.isInteger(number) || number < 1 || number > 40) {
+      return send(res, 400, { error: "number", message: "번호는 1~40 중 하나여야 합니다." });
+    }
+    if (isStateLocal()) {
+      const owner = memClaimByNum.get(number);
+      if (owner && owner !== b.client) {
+        return send(res, 409, { error: "taken", message: "이미 선택된 번호예요.", taken: memTakenList() });
+      }
+      const prev = memClaimByClient.get(b.client);
+      if (prev && prev !== number) memClaimByNum.delete(prev);
+      memClaimByNum.set(number, b.client);
+      memClaimByClient.set(b.client, number);
+      return send(res, 200, { number, taken: memTakenList() });
+    }
+    const { data, error } = await supabase.rpc("claim_show_number", {
+      p_client: b.client,
+      p_number: number,
+    });
+    if (error) {
+      return send(res, 503, { error: "no_claims", message: "claim_show_number 함수가 없습니다. supabase-schema.sql 을 실행해주세요." });
+    }
+    if (data && data.error === "taken") {
+      return send(res, 409, { error: "taken", message: "이미 선택된 번호예요.", taken: data.taken || [] });
+    }
+    if (data && data.error) {
+      return send(res, 400, { error: data.error });
+    }
+    return send(res, 200, { number: data.number, taken: data.taken || [] });
+  }
+
+  if (route === "POST /api/claims/reset") {
+    if (isStateLocal()) {
+      memClaimByNum.clear();
+      memClaimByClient.clear();
+      return send(res, 200, { taken: [] });
+    }
+    const { data, error } = await supabase.rpc("reset_show_claims", { p_secret: SHOW_SECRET });
+    if (error) {
+      if (error.code === "21000") {
+        return send(res, 503, { error: "safeupdate", message: "reset_show_claims 함수 업데이트가 필요합니다. supabase-schema.sql 을 다시 Run 해주세요." });
+      }
+      return send(res, 503, { error: "no_claims", message: "reset_show_claims 함수가 없습니다. supabase-schema.sql 을 실행해주세요." });
+    }
+    if (data && data.error === "unauthorized") {
+      return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });
+    }
+    if (data && data.error) {
+      return send(res, 400, { error: data.error });
+    }
+    return send(res, 200, { taken: [] });
+  }
+
+  // 5. Admin API
   if (url.pathname.startsWith("/api/admin/")) {
     if (!adminOk(req)) return send(res, 401, { error: "unauthorized" });
 
@@ -298,6 +444,9 @@ async function handler(req, res) {
   }
 
   return send(res, 404, { error: "not_found" });
+  } catch (e) {
+    return send(res, e.status || 500, { error: e.status ? "bad_request" : "server_error", message: e.message });
+  }
 }
 
 module.exports = handler;

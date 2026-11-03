@@ -88,3 +88,168 @@ $$;
 
 -- 함수 실행 권한 부여
 GRANT EXECUTE ON FUNCTION public.book_ticket(TEXT, TEXT, TEXT, INTEGER) TO anon, authenticated;
+
+-- ==============================================================================
+-- DEVICE 공연 제어 & 관객 개인번호 1~40 (/tx 운영 콘솔 · /rx 관객 휴대폰)
+-- ==============================================================================
+
+-- 5. 현재 공연 상태 (행 하나만 존재)
+--    mode: 1~7 (DEVICE 표의 MODE)
+--    timer_started_at: 800초 카운트다운 시작 시각. 모드 3 진입 시 기록되며 모드 4는 그대로 이어간다.
+CREATE TABLE IF NOT EXISTS public.show_state (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  mode INTEGER NOT NULL DEFAULT 1 CHECK (mode BETWEEN 1 AND 7),
+  timer_started_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO public.show_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- 누구나 읽기 가능 (관객 휴대폰 /rx 가 실시간 구독). 쓰기는 set_show_mode 함수로만 허용.
+ALTER TABLE public.show_state ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can read show state" ON public.show_state;
+CREATE POLICY "Anyone can read show state"
+  ON public.show_state
+  FOR SELECT
+  TO anon, authenticated
+  USING (true);
+
+-- 6. 공연 제어 비밀번호 보관 (RLS 정책이 없으므로 anon 은 읽을 수 없음)
+CREATE TABLE IF NOT EXISTS public.show_control (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  secret TEXT NOT NULL
+);
+ALTER TABLE public.show_control ENABLE ROW LEVEL SECURITY;
+-- ⚠️ 기본값은 서버(.env / Vercel)의 기본 ADMIN_TOKEN('admin1234')과 맞춰져 있습니다.
+-- ADMIN_TOKEN 환경변수를 다른 값으로 바꾸셨다면 아래 'admin1234'도 똑같은 값으로 바꾼 뒤 실행하세요.
+INSERT INTO public.show_control (id, secret) VALUES (1, 'admin1234')
+  ON CONFLICT (id) DO UPDATE SET secret = EXCLUDED.secret;
+
+-- 7. 모드 변경 함수 (RPC: set_show_mode — 서버가 ADMIN_TOKEN 으로 호출)
+CREATE OR REPLACE FUNCTION public.set_show_mode(p_mode INTEGER, p_secret TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_prev INTEGER;
+  v_timer TIMESTAMPTZ;
+  v_now TIMESTAMPTZ := NOW();
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.show_control WHERE id = 1 AND secret = p_secret) THEN
+    RETURN jsonb_build_object('error', 'unauthorized');
+  END IF;
+  IF p_mode IS NULL OR p_mode < 1 OR p_mode > 7 THEN
+    RETURN jsonb_build_object('error', 'bad_mode');
+  END IF;
+
+  INSERT INTO public.show_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+  SELECT mode, timer_started_at INTO v_prev, v_timer FROM public.show_state WHERE id = 1 FOR UPDATE;
+
+  IF p_mode IN (1, 2) THEN
+    v_timer := NULL;                                  -- 카운트다운 이전 단계로 돌아가면 초기화
+  ELSIF p_mode = 3 AND v_prev IS DISTINCT FROM 3 THEN
+    v_timer := v_now;                                 -- 모드 3 진입 = 800초 시작
+  ELSIF p_mode = 4 AND v_timer IS NULL THEN
+    v_timer := v_now;                                 -- 3을 건너뛰고 4로 왔을 때만 새로 시작
+  END IF;
+
+  UPDATE public.show_state SET mode = p_mode, timer_started_at = v_timer, updated_at = v_now WHERE id = 1;
+  RETURN jsonb_build_object('mode', p_mode, 'timer_started_at', v_timer, 'updated_at', v_now);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.set_show_mode(INTEGER, TEXT) TO anon, authenticated;
+
+-- 8. 관객 개인번호 점유 테이블 (1~40번, 휴대폰당 1개 번호)
+CREATE TABLE IF NOT EXISTS public.show_claims (
+  num INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 40),
+  client_id TEXT NOT NULL UNIQUE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 누구나 현재 선택된 번호 상태를 조회·구독 가능. 변경/초기화는 아래 RPC 함수로만 허용.
+ALTER TABLE public.show_claims ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can read show claims" ON public.show_claims;
+CREATE POLICY "Anyone can read show claims"
+  ON public.show_claims
+  FOR SELECT
+  TO anon, authenticated
+  USING (true);
+
+-- 9. 관객 개인번호 원자적 배정 함수 (RPC: claim_show_number)
+-- 여러 관객이 동시에 같은 번호를 눌러도 pg_advisory_xact_lock 으로 중복 배정을 100% 차단합니다.
+CREATE OR REPLACE FUNCTION public.claim_show_number(p_client TEXT, p_number INTEGER)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_owner TEXT;
+  v_taken JSONB;
+BEGIN
+  IF p_client IS NULL OR p_client !~ '^[A-Za-z0-9-]{8,64}$' THEN
+    RETURN jsonb_build_object('error', 'client');
+  END IF;
+  IF p_number IS NULL OR p_number < 1 OR p_number > 40 THEN
+    RETURN jsonb_build_object('error', 'number');
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtext('buffer_show_claims'));
+
+  SELECT client_id INTO v_owner FROM public.show_claims WHERE num = p_number;
+  IF v_owner IS NOT NULL AND v_owner <> p_client THEN
+    SELECT COALESCE(jsonb_agg(num ORDER BY num), '[]'::jsonb) INTO v_taken FROM public.show_claims;
+    RETURN jsonb_build_object('error', 'taken', 'taken', v_taken);
+  END IF;
+
+  -- 이 휴대폰이 기존에 잡고 있던 다른 번호가 있으면 해제
+  DELETE FROM public.show_claims WHERE client_id = p_client AND num <> p_number;
+
+  -- 번호 배정 (이미 본인 번호면 시각만 갱신)
+  INSERT INTO public.show_claims (num, client_id, updated_at)
+  VALUES (p_number, p_client, NOW())
+  ON CONFLICT (num) DO UPDATE SET client_id = EXCLUDED.client_id, updated_at = NOW();
+
+  SELECT COALESCE(jsonb_agg(num ORDER BY num), '[]'::jsonb) INTO v_taken FROM public.show_claims;
+  RETURN jsonb_build_object('number', p_number, 'taken', v_taken);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.claim_show_number(TEXT, INTEGER) TO anon, authenticated;
+
+-- 10. 관객 개인번호 전체 초기화 함수 (RPC: reset_show_claims — 회차 전환 시 /tx 에서 호출)
+CREATE OR REPLACE FUNCTION public.reset_show_claims(p_secret TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.show_control WHERE id = 1 AND secret = p_secret) THEN
+    RETURN jsonb_build_object('error', 'unauthorized');
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtext('buffer_show_claims'));
+  DELETE FROM public.show_claims WHERE num >= 1;
+  RETURN jsonb_build_object('taken', '[]'::jsonb);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.reset_show_claims(TEXT) TO anon, authenticated;
+
+-- 11. 실시간 구독(Supabase Realtime) 활성화 (관객 휴대폰 /rx 가 즉시 반영하도록)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'show_state'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.show_state;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'show_claims'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.show_claims;
+  END IF;
+END $$;

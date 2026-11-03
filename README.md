@@ -30,6 +30,9 @@ npm run dev
 
 - 예매 페이지: `/`
 - 관리자 페이지: `/admin` (`ADMIN_TOKEN` 입력, 예매 목록 실시간 검색/필터, CSV 내려받기, 삭제)
+- 공연 송출 콘솔 (TX): `/tx` (공연 모드 1~7 전환, 800초 카운트다운 확인, 관객 번호 현황 및 전체 초기화)
+- 관객 휴대폰 화면 (RX): `/rx` (LaNA RX 3D 보드, 개인번호 `01~40` 선택, 실시간 모드·음성·버튼 단음 동기화)
+- 리허설 분할 화면: `/split` (`/tx`와 `/rx` 상하 동시 확인)
 - Supabase SQL 마이그레이션: `supabase-schema.sql` (Supabase Dashboard의 SQL Editor에서 복사하여 [Run] 실행)
 
 ## Supabase 설정 방법
@@ -59,6 +62,7 @@ npm run dev
 | `ADMIN_TOKEN` | (없음) | 비우면 관리자 기능이 꺼집니다 |
 | `SUPABASE_URL` | https://qatrsegoqwandtsasunp.supabase.co | Supabase 프로젝트 URL |
 | `SUPABASE_KEY` | sb_publishable_... | Supabase Publishable / Anon / Service Key |
+| `SHOW_STATE` | (없음) | `local`로 설정 시 공연 모드·관객 번호(`/tx`·`/rx`)를 Supabase 대신 로컬 DB에만 저장 |
 | `DB_PATH` | ./data/tickets.db | SQLite 로컬 DB 위치 (Supabase 미연동 시 폴백) |
 | `SEATS` | `A=26,B=26,C=32,D=32` | 회차별 예매 좌석 수 (1·2회차 26매, 3·4회차 32매) |
 | `BOOK_RATE_MAX` | 30 | IP당 10분간 예매 시도 한도 |

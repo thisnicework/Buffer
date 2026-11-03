@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>TX / RX</title>
+<style>
+/* rehearsal view: operator console on top, one audience phone below */
+:root{--paper:#fff;--ink:#0A0B0C;--mute:#6B7075;--line:#E2E4E6;color-scheme:light}
+html,body{height:100%;margin:0}
+body{background:var(--paper);display:grid;grid-template-rows:1fr 1fr}
+section{position:relative;min-height:0;border-bottom:1px solid var(--ink)}
+section:last-child{border-bottom:0}
+iframe{display:block;width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+  <!-- "?split" keeps these from reusing a cached copy that was saved before framing was allowed -->
+  <section><iframe src="/tx?split" title="TX 운영 화면"></iframe></section>
+  <section><iframe src="/rx?split" title="RX 관객 화면"></iframe></section>
+</body>
+</html>

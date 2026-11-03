@@ -81,7 +81,19 @@ sqliteDb.exec(`
     created_at TEXT    NOT NULL,
     UNIQUE (show_id, seat)
   );
+  CREATE TABLE IF NOT EXISTS show_state (
+    id               INTEGER PRIMARY KEY CHECK (id = 1),
+    mode             INTEGER NOT NULL DEFAULT 1,
+    timer_started_at TEXT,
+    updated_at       TEXT    NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS show_claims (
+    num        INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 40),
+    client_id  TEXT    NOT NULL UNIQUE,
+    updated_at TEXT    NOT NULL
+  );
 `);
+sqliteDb.prepare("INSERT OR IGNORE INTO show_state (id, mode, timer_started_at, updated_at) VALUES (1, 1, NULL, ?)").run(new Date().toISOString());
 
 const sqliteQueries = {
   countByShow: sqliteDb.prepare("SELECT show_id, COUNT(*) AS n FROM reservations GROUP BY show_id"),
@@ -93,6 +105,13 @@ const sqliteQueries = {
   cancel: sqliteDb.prepare("DELETE FROM reservations WHERE code = ? AND phone = ?"),
   all: sqliteDb.prepare("SELECT show_id, seat, code, name, phone, created_at FROM reservations ORDER BY show_id, seat"),
   adminDelete: sqliteDb.prepare("DELETE FROM reservations WHERE code = ?"),
+  getState: sqliteDb.prepare("SELECT mode, timer_started_at, updated_at FROM show_state WHERE id = 1"),
+  setState: sqliteDb.prepare("UPDATE show_state SET mode = ?, timer_started_at = ?, updated_at = ? WHERE id = 1"),
+  getClaims: sqliteDb.prepare("SELECT num, client_id FROM show_claims ORDER BY num ASC"),
+  getClaimOwner: sqliteDb.prepare("SELECT client_id FROM show_claims WHERE num = ?"),
+  deleteClientOtherClaim: sqliteDb.prepare("DELETE FROM show_claims WHERE client_id = ? AND num <> ?"),
+  upsertClaim: sqliteDb.prepare("INSERT INTO show_claims (num, client_id, updated_at) VALUES (?, ?, ?) ON CONFLICT(num) DO UPDATE SET client_id = excluded.client_id, updated_at = excluded.updated_at"),
+  clearClaims: sqliteDb.prepare("DELETE FROM show_claims"),
 };
 
 const pad = (n) => (n < 10 ? "0" : "") + n;
@@ -164,7 +183,7 @@ function bookSqlite(showId, name, phone) {
     sqliteDb.exec("COMMIT");
     return { code, seat, show: showId };
   } catch (e) {
-    try { sqliteDb.exec("ROLLBACK"); } catch (_) {}
+    try { sqliteDb.exec("ROLLBACK"); } catch (_) { }
     throw e;
   }
 }
@@ -309,6 +328,176 @@ async function dbAdminDelete(code) {
   return true;
 }
 
+// ---- DEVICE 공연 상태 & 관객 개인번호 1~40 (/tx 가 바꾸고 /rx 가 따라감) ----
+// Supabase show_state / show_claims 가 원본. 테이블이 아직 없거나 SHOW_STATE=local 이면 로컬 SQLite 로 폴백 동작
+const TIMER_SECONDS = 800;
+const SHOW_SECRET = ADMIN_TOKEN || "admin1234";
+const STATE_LOCAL = String(process.env.SHOW_STATE || "").toLowerCase() === "local";
+const validClient = (v) => typeof v === "string" && /^[A-Za-z0-9-]{8,64}$/.test(v);
+
+function statePayload(row) {
+  const ms = (v) => (v ? new Date(v).getTime() : null);
+  return {
+    mode: row.mode,
+    timerStartedAtMs: ms(row.timer_started_at),
+    updatedAtMs: ms(row.updated_at),
+    timerSeconds: TIMER_SECONDS,
+    nowMs: Date.now(),
+  };
+}
+
+let stateWarned = false;
+function warnStateOnce(msg) {
+  if (stateWarned) return;
+  stateWarned = true;
+  console.warn(`⚠️  [Supabase] show_state 를 쓸 수 없어 로컬 DB로 모드를 저장합니다 (${msg}). supabase-schema.sql 5~11번을 실행하면 사라집니다.`);
+}
+
+let claimsWarned = false;
+function warnClaimsOnce(msg) {
+  if (claimsWarned) return;
+  claimsWarned = true;
+  console.warn(`⚠️  [Supabase] show_claims 를 쓸 수 없어 로컬 DB로 관객 번호를 저장합니다 (${msg}). supabase-schema.sql 5~11번을 실행하면 사라집니다.`);
+}
+
+async function dbGetState() {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase.from("show_state").select("mode, timer_started_at, updated_at").eq("id", 1).maybeSingle();
+      if (!error && data) {
+        sqliteQueries.setState.run(data.mode, data.timer_started_at || null, data.updated_at);
+        return data;
+      }
+      if (error) warnStateOnce(error.message);
+    } catch (e) {
+      warnStateOnce(e.message);
+    }
+  }
+  return sqliteQueries.getState.get() || { mode: 1, timer_started_at: null, updated_at: new Date().toISOString() };
+}
+
+// 같은 규칙을 Supabase 함수 set_show_mode 와 로컬 SQLite 폴백 양쪽에 적용
+async function dbSetMode(mode) {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
+      if (!error && data && !data.error) {
+        sqliteQueries.setState.run(data.mode, data.timer_started_at || null, data.updated_at);
+        return data;
+      }
+      if (data && data.error) return { error: data.error };
+      warnStateOnce(error && error.message);
+    } catch (e) {
+      warnStateOnce(e.message);
+    }
+  }
+  const cur = sqliteQueries.getState.get() || { mode: 1, timer_started_at: null };
+  const prev = cur.mode;
+  const nowIso = new Date().toISOString();
+  let timer = cur.timer_started_at || null;
+  if (mode === 1 || mode === 2) timer = null;
+  else if (mode === 3 && prev !== 3) timer = nowIso;
+  else if (mode === 4 && !timer) timer = nowIso;
+  sqliteQueries.setState.run(mode, timer, nowIso);
+  return { mode, timer_started_at: timer, updated_at: nowIso };
+}
+
+function sqliteClaimsSnapshot(client) {
+  const rows = sqliteQueries.getClaims.all();
+  const taken = rows.map((r) => r.num);
+  const mineRow = validClient(client) ? rows.find((r) => r.client_id === client) : null;
+  return { taken, mine: mineRow ? mineRow.num : null };
+}
+
+async function dbGetClaims(client) {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase
+        .from("show_claims")
+        .select("num, client_id")
+        .order("num", { ascending: true });
+      if (!error && Array.isArray(data)) {
+        const taken = data.map((r) => r.num);
+        const mineRow = validClient(client) ? data.find((r) => r.client_id === client) : null;
+        return { taken, mine: mineRow ? mineRow.num : null };
+      }
+      if (error) warnClaimsOnce(error.message);
+    } catch (e) {
+      warnClaimsOnce(e.message);
+    }
+  }
+  return sqliteClaimsSnapshot(client);
+}
+
+async function dbClaimNumber(client, number) {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase.rpc("claim_show_number", {
+        p_client: client,
+        p_number: number,
+      });
+      if (!error && data) {
+        if (data.error === "taken") return { error: "taken", taken: data.taken || [] };
+        if (data.error) return { error: data.error };
+        sqliteQueries.deleteClientOtherClaim.run(client, number);
+        sqliteQueries.upsertClaim.run(number, client, new Date().toISOString());
+        return { number: data.number, taken: data.taken || [] };
+      }
+      warnClaimsOnce(error && error.message);
+    } catch (e) {
+      warnClaimsOnce(e.message);
+    }
+  }
+
+  sqliteDb.exec("BEGIN IMMEDIATE");
+  try {
+    const owner = sqliteQueries.getClaimOwner.get(number);
+    if (owner && owner.client_id !== client) {
+      sqliteDb.exec("ROLLBACK");
+      return { error: "taken", taken: sqliteClaimsSnapshot(null).taken };
+    }
+    sqliteQueries.deleteClientOtherClaim.run(client, number);
+    sqliteQueries.upsertClaim.run(number, client, new Date().toISOString());
+    sqliteDb.exec("COMMIT");
+    return { number, taken: sqliteClaimsSnapshot(null).taken };
+  } catch (e) {
+    try { sqliteDb.exec("ROLLBACK"); } catch (_) { }
+    throw e;
+  }
+}
+
+async function dbResetClaims() {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase.rpc("reset_show_claims", { p_secret: SHOW_SECRET });
+      if (!error && data) {
+        if (data.error) return { error: data.error };
+        sqliteQueries.clearClaims.run();
+        return { taken: [] };
+      }
+      warnClaimsOnce(error && error.message);
+    } catch (e) {
+      warnClaimsOnce(e.message);
+    }
+  }
+  sqliteQueries.clearClaims.run();
+  return { taken: [] };
+}
+
+// open /api/stream connections (Server-Sent Events)
+const streams = new Set();
+function broadcastState(row) {
+  const msg = `data: ${JSON.stringify(statePayload(row))}\n\n`;
+  for (const res of streams) res.write(msg);
+}
+function broadcastClaims(taken) {
+  const msg = `event: claims\ndata: ${JSON.stringify({ taken })}\n\n`;
+  for (const res of streams) res.write(msg);
+}
+
+// keep idle connections from being dropped by phones / proxies
+setInterval(() => { for (const res of streams) res.write(": ping\n\n"); }, 20000).unref();
+
 // ---- 요청 제한 (IP당) ----
 const hits = new Map();
 function limited(ip, max, windowMs) {
@@ -433,6 +622,73 @@ async function api(req, res, url) {
     return send(res, 200, { code: row.code, show: row.show_id, name: row.name, phone: row.phone });
   }
 
+  if (route === "GET /api/state") {
+    return send(res, 200, statePayload(await dbGetState()));
+  }
+
+  // live push to /rx: each phone holds this open and gets the new state the moment /tx changes it
+  if (route === "GET /api/stream") {
+    const [curState, curClaims] = await Promise.all([dbGetState(), dbGetClaims(null)]);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-store",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.write(`retry: 2000\ndata: ${JSON.stringify(statePayload(curState))}\n\n`);
+    res.write(`event: claims\ndata: ${JSON.stringify({ taken: curClaims.taken })}\n\n`);
+    streams.add(res);
+    req.on("close", () => streams.delete(res));
+    return;
+  }
+
+  if (route === "GET /api/claims") {
+    const client = url.searchParams.get("client");
+    return send(res, 200, await dbGetClaims(client));
+  }
+
+  if (route === "POST /api/claim") {
+    const b = await readJson(req);
+    const number = Number(b.number);
+    if (!validClient(b.client)) return send(res, 400, { error: "client" });
+    if (!Number.isInteger(number) || number < 1 || number > 40) {
+      return send(res, 400, { error: "number", message: "번호는 1~40 중 하나여야 합니다." });
+    }
+    const r = await dbClaimNumber(b.client, number);
+    if (r.error === "taken") {
+      return send(res, 409, { error: "taken", message: "이미 선택된 번호예요.", taken: r.taken });
+    }
+    if (r.error) return send(res, 400, { error: r.error });
+    broadcastClaims(r.taken);
+    return send(res, 200, { number: r.number, taken: r.taken });
+  }
+
+  if (route === "POST /api/claims/reset") {
+    const r = await dbResetClaims();
+    if (r.error === "unauthorized") {
+      return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });
+    }
+    if (r.error) return send(res, 400, { error: r.error });
+    broadcastClaims([]);
+    return send(res, 200, { taken: [] });
+  }
+
+  // /tx 는 비밀번호 없이 모드를 바꾼다 (운영자 요청). Supabase 쓰기 비밀번호는 서버의 ADMIN_TOKEN 이 대신 넣는다
+  if (route === "POST /api/state") {
+    const b = await readJson(req);
+    const mode = Number(b.mode);
+    if (!Number.isInteger(mode) || mode < 1 || mode > 7) {
+      return send(res, 400, { error: "bad_mode", message: "모드는 1~7 중 하나여야 합니다." });
+    }
+    const r = await dbSetMode(mode);
+    if (r.error === "unauthorized") {
+      return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });
+    }
+    if (r.error) return send(res, 400, { error: r.error });
+    broadcastState(r);
+    return send(res, 200, statePayload(r));
+  }
+
   if (url.pathname.startsWith("/api/admin/")) {
     if (!adminOk(req)) return send(res, 401, { error: "unauthorized" });
 
@@ -484,6 +740,8 @@ const TYPES = {
   ".jpg": "image/jpeg",
   ".webp": "image/webp",
   ".mp4": "video/mp4",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
   ".ico": "image/x-icon",
   ".woff2": "font/woff2",
   ".txt": "text/plain; charset=utf-8",
@@ -514,6 +772,9 @@ function serveStatic(req, res, url) {
   let p = decodeURIComponent(url.pathname);
   if (p === "/") p = "/index.html";
   if (p === "/admin") p = "/admin.html";
+  if (p === "/rx") p = "/rx.html";
+  if (p === "/tx") p = "/tx.html";
+  if (p === "/split") p = "/split.html";
 
   if (isForbiddenPath(p)) return send(res, 403, "Forbidden");
 
@@ -537,7 +798,7 @@ function serveStatic(req, res, url) {
           fs.createReadStream(file).pipe(res);
           return;
         }
-      } catch (_) {}
+      } catch (_) { }
     }
   }
 
@@ -551,7 +812,7 @@ async function startServer() {
   const server = http.createServer(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
-    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN"); // /split frames /tx and /rx from this same site
     try {
       const url = new URL(req.url, "http://localhost");
       if (isForbiddenPath(url.pathname)) return send(res, 403, "Forbidden");
@@ -559,7 +820,10 @@ async function startServer() {
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
 
       if (vite) {
-        if (url.pathname === "/admin") req.url = "/admin.html";
+        if (url.pathname === "/admin") req.url = "/admin.html" + url.search;
+        if (url.pathname === "/rx") req.url = "/rx.html" + url.search;
+        if (url.pathname === "/tx") req.url = "/tx.html" + url.search;
+        if (url.pathname === "/split") req.url = "/split.html" + url.search;
         return vite.middlewares(req, res, () => serveStatic(req, res, url));
       }
 
@@ -616,10 +880,13 @@ async function startServer() {
     const seatsInfo = SHOWS.map((x) => `${x.id}=${SEATS[x.id]}`).join(" ");
 
     console.log(`
-  🎟️  BUFFER 티켓 예매 서버 실행 완료
+  🎟️  BUFFER 티켓 예매 & 공연 제어 서버 실행 완료
 
-  ➜  접속 주소:      http://localhost:${PORT}/
+  ➜  예매 페이지:    http://localhost:${PORT}/
   ➜  관리자 페이지:  http://localhost:${PORT}/admin
+  ➜  공연 송출(TX):  http://localhost:${PORT}/tx
+  ➜  관객 화면(RX):  http://localhost:${PORT}/rx
+  ➜  분할 리허설:    http://localhost:${PORT}/split
   ➜  프론트엔드:      ${viteText}
   ➜  데이터베이스:    ${dbText}
   ➜  예매 상태:      ${statusText}
@@ -632,9 +899,9 @@ async function startServer() {
     process.on(sig, () => {
       server.close(async () => {
         if (vite) {
-          try { await vite.close(); } catch (_) {}
+          try { await vite.close(); } catch (_) { }
         }
-        try { sqliteDb.close(); } catch (_) {}
+        try { sqliteDb.close(); } catch (_) { }
         process.exit(0);
       });
     });

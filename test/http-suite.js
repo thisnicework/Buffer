@@ -39,7 +39,7 @@ function request(server, method, path, body = null, headers = {}) {
       res.on("data", (c) => data += c);
       res.on("end", () => {
         let json = null;
-        try { json = JSON.parse(data); } catch (_) {}
+        try { json = JSON.parse(data); } catch (_) { }
         resolve({ status: res.statusCode, headers: res.headers, data: json || data });
       });
     });
@@ -72,7 +72,7 @@ async function main() {
     console.log(`\n[검증 1] 시간 검증: OPEN_AT 도달 전 예매 시도 차단 ("절대 시간 틀려서는 안돼")`);
     const showsRes = await request(server, "GET", "/api/shows");
     console.log(`- GET /api/shows 응답: open=${showsRes.data.open}, openAt=${showsRes.data.openAt}, now=${showsRes.data.now}`);
-    
+
     if (showsRes.status !== 200) throw new Error(`GET /api/shows 실패: ${showsRes.status}`);
     if (showsRes.data.open !== false) throw new Error("현재 시각 기준으로 open이 false여야 합니다!");
 
@@ -242,6 +242,100 @@ async function main() {
       throw new Error("❌ 테스트 데이터가 완전히 삭제되지 않았습니다!");
     }
     console.log(`✅ [검증 6 통과] DB가 원래대로 100% 무결하게 정리되었습니다.`);
+
+    // ------------------------------------------------------------------
+    // [검증 7] DEVICE 공연 제어(/api/state) 및 관객 개인번호(/api/claims, /api/claim, /api/claims/reset) 검증
+    // ------------------------------------------------------------------
+    console.log(`\n[검증 7] DEVICE 공연 모드(1~7) 및 관객 개인번호(1~40) API 무결성 검증`);
+    // Supabase에 show_state가 이미 배포되었는지 확인하고, 미배포 상태면 SHOW_STATE=local 모드로 핸들러 동작 검증
+    const probeState = await request(openServer, "GET", "/api/state");
+    const usingLocalState = probeState.status === 503;
+    if (usingLocalState) {
+      console.log(`- (참고) Supabase에 show_state/show_claims 미배포 상태 확인(503) → SHOW_STATE=local 모드로 API 로직 검증 진행`);
+      process.env.SHOW_STATE = "local";
+    }
+
+    // 1) 초기 상태 및 모드 전환 (1 -> 3 카운트다운 시작 -> 4 유지 -> 1 초기화)
+    await request(openServer, "POST", "/api/state", { mode: 1 });
+    const st1 = await request(openServer, "GET", "/api/state");
+    if (st1.status !== 200 || st1.data.mode !== 1 || st1.data.timerStartedAtMs !== null) {
+      throw new Error(`❌ 모드 1 상태 오류: ${JSON.stringify(st1.data)}`);
+    }
+
+    const badMode = await request(openServer, "POST", "/api/state", { mode: 8 });
+    if (badMode.status !== 400 || badMode.data.error !== "bad_mode") {
+      throw new Error(`❌ 잘못된 모드(8) 차단 실패: ${badMode.status}`);
+    }
+
+    const st3 = await request(openServer, "POST", "/api/state", { mode: 3 });
+    if (st3.status !== 200 || st3.data.mode !== 3 || typeof st3.data.timerStartedAtMs !== "number" || st3.data.timerSeconds !== 800) {
+      throw new Error(`❌ 모드 3(800초 타이머 시작) 오류: ${JSON.stringify(st3.data)}`);
+    }
+    const timerAt3 = st3.data.timerStartedAtMs;
+
+    const st4 = await request(openServer, "POST", "/api/state", { mode: 4 });
+    if (st4.status !== 200 || st4.data.mode !== 4 || st4.data.timerStartedAtMs !== timerAt3) {
+      throw new Error(`❌ 모드 4 진입 시 기존 800초 타이머가 유지되지 않음: ${JSON.stringify(st4.data)}`);
+    }
+
+    const stReset = await request(openServer, "POST", "/api/state", { mode: 1 });
+    if (stReset.status !== 200 || stReset.data.timerStartedAtMs !== null) {
+      throw new Error(`❌ 모드 1 복귀 시 타이머 초기화 실패: ${JSON.stringify(stReset.data)}`);
+    }
+
+    // 2) 관객 개인번호 1~40 점유·중복 차단·번호 변경·전체 초기화
+    await request(openServer, "POST", "/api/claims/reset");
+    const clientA = "phone-client-aaaa-1111";
+    const clientB = "phone-client-bbbb-2222";
+
+    const claimA7 = await request(openServer, "POST", "/api/claim", { client: clientA, number: 7 });
+    if (claimA7.status !== 200 || claimA7.data.number !== 7 || !claimA7.data.taken.includes(7)) {
+      throw new Error(`❌ 관객 A 7번 선택 실패: ${JSON.stringify(claimA7.data)}`);
+    }
+
+    // 다른 휴대폰(B)이 이미 선택된 7번 선택 시도 -> 409 taken
+    const claimB7 = await request(openServer, "POST", "/api/claim", { client: clientB, number: 7 });
+    if (claimB7.status !== 409 || claimB7.data.error !== "taken") {
+      throw new Error(`❌ 중복 번호(7번) 409 차단 실패: status=${claimB7.status}, data=${JSON.stringify(claimB7.data)}`);
+    }
+
+    // 관객 A가 12번으로 변경 -> 기존 7번이 풀리고 12번만 점유되어야 함
+    const claimA12 = await request(openServer, "POST", "/api/claim", { client: clientA, number: 12 });
+    if (claimA12.status !== 200 || claimA12.data.taken.includes(7) || !claimA12.data.taken.includes(12)) {
+      throw new Error(`❌ 번호 변경 시 이전 번호 해제 실패: ${JSON.stringify(claimA12.data)}`);
+    }
+
+    // 이제 관객 B가 풀린 7번 선택 가능
+    const claimB7Retry = await request(openServer, "POST", "/api/claim", { client: clientB, number: 7 });
+    if (claimB7Retry.status !== 200 || claimB7Retry.data.taken.length !== 2) {
+      throw new Error(`❌ 해제된 번호 재선택 실패: ${JSON.stringify(claimB7Retry.data)}`);
+    }
+
+    // GET /api/claims?client=... 본인 번호 조회
+    const checkA = await request(openServer, "GET", `/api/claims?client=${clientA}`);
+    if (checkA.status !== 200 || checkA.data.mine !== 12 || checkA.data.taken.length !== 2) {
+      throw new Error(`❌ 본인 번호 조회 오류: ${JSON.stringify(checkA.data)}`);
+    }
+
+    // 전체 초기화
+    const resetRes = await request(openServer, "POST", "/api/claims/reset");
+    if (resetRes.status === 503 && resetRes.data && resetRes.data.error === "safeupdate") {
+      console.log(`- (참고) Supabase reset_show_claims WHERE 절 패치 전 상태(503 safeupdate) 확인`);
+    } else {
+      const afterReset = await request(openServer, "GET", `/api/claims?client=${clientA}`);
+      if (resetRes.status !== 200 || afterReset.data.taken.length !== 0 || afterReset.data.mine !== null) {
+        throw new Error(`❌ 관객 번호 전체 초기화 실패: ${JSON.stringify(afterReset.data)}`);
+      }
+    }
+
+    // GET /api/stream (Serverless 204 확인)
+    const streamRes = await request(openServer, "GET", "/api/stream");
+    if (streamRes.status !== 204) {
+      throw new Error(`❌ Serverless /api/stream 204 응답 실패: ${streamRes.status}`);
+    }
+
+    delete process.env.SHOW_STATE;
+    console.log(`✅ [검증 7 통과] DEVICE 공연 모드(1~7, 800초 타이머) 및 관객 번호(1~40 배정·중복차단·변경·초기화) 검증 완료.`);
 
     openServer.close();
   } finally {

@@ -2,3 +2,6 @@ data/
 .env
 node_modules/
 dist/
+.DS_Store
+Buffer-main/
+Buffer-main 2/
