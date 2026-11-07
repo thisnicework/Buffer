@@ -60,6 +60,7 @@ const SHOWS = [
   { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM" },
 ];
 const SHOW_IDS = new Set(SHOWS.map((s) => s.id));
+const SOLD_OUT_SHOWS = new Set(["D"]); // 4회차(11.15 일 7PM) 매진 처리
 
 if (!Number.isFinite(OPEN_AT)) {
   console.error("OPEN_AT 형식이 올바르지 않습니다. 예: 2026-11-04T20:00:00+09:00");
@@ -158,13 +159,14 @@ async function showsPublic() {
     const count = used[s.id] || 0;
     return {
       ...s,
-      soldOut: count >= cap,
+      soldOut: SOLD_OUT_SHOWS.has(s.id) || count >= cap,
     };
   });
 }
 
 // 3. SQLite 예매 트랜잭션 (폴백용)
 function bookSqlite(showId, name, phone) {
+  if (SOLD_OUT_SHOWS.has(showId)) return { error: "soldout" };
   sqliteDb.exec("BEGIN IMMEDIATE");
   try {
     if (sqliteQueries.byPhone.get(phone)) {
@@ -190,6 +192,7 @@ function bookSqlite(showId, name, phone) {
 
 // 4. 예매 처리 (Supabase RPC 원자적 락 우선, 테이블 쿼리 폴백, SQLite 폴백)
 async function dbBook(showId, name, phone) {
+  if (SOLD_OUT_SHOWS.has(showId)) return { error: "soldout" };
   if (supabase) {
     try {
       // 1순위: 분산 락(advisory lock)이 적용된 RPC book_ticket 호출

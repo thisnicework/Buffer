@@ -37,6 +37,7 @@ const SHOWS = [
   { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM" },
 ];
 const SHOW_IDS = new Set(SHOWS.map((s) => s.id));
+const SOLD_OUT_SHOWS = new Set(["D"]); // 4회차(11.15 일 7PM) 매진 처리
 
 const pad = (n) => (n < 10 ? "0" : "") + n;
 const isOpen = () => Date.now() >= OPEN_AT;
@@ -158,7 +159,7 @@ async function handler(req, res) {
       const count = counts[s.id] || 0;
       return {
         ...s,
-        soldOut: count >= cap,
+        soldOut: SOLD_OUT_SHOWS.has(s.id) || count >= cap,
       };
     });
     const isTest = url.searchParams.get("test") === "1" || url.searchParams.get("open") === "1";
@@ -181,6 +182,7 @@ async function handler(req, res) {
     if (!isOpen() && !isTest) return send(res, 403, { error: "not_open", message: "아직 예매가 열리지 않았습니다." });
     if (b.consent !== true) return send(res, 400, { error: "consent", message: "아카이빙·트리거 워닝 안내를 확인해야 예매할 수 있습니다." });
     if (!SHOW_IDS.has(b.show)) return send(res, 400, { error: "show", message: "회차를 선택해주세요." });
+    if (SOLD_OUT_SHOWS.has(b.show)) return send(res, 409, { error: "soldout", message: "이 회차는 매진되었습니다. 다른 회차를 선택해주세요." });
     const name = cleanName(b.name);
     if (!name) return send(res, 400, { error: "name", message: "이름을 입력해주세요." });
     const phone = normalizePhone(b.phone);
