@@ -60,7 +60,7 @@ const SHOWS = [
   { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM" },
 ];
 const SHOW_IDS = new Set(SHOWS.map((s) => s.id));
-const SOLD_OUT_SHOWS = new Set(["D"]); // 4회차(11.15 일 7PM) 매진 처리
+const SOLD_OUT_SHOWS = new Set(["B", "D"]); // 2회차(11.14 토 7PM), 4회차(11.15 일 7PM) 매진 처리
 
 if (!Number.isFinite(OPEN_AT)) {
   console.error("OPEN_AT 형식이 올바르지 않습니다. 예: 2026-11-04T20:00:00+09:00");
