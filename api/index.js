@@ -299,8 +299,8 @@ async function handler(req, res) {
   if (route === "POST /api/state") {
     const b = await getJson(req);
     const mode = Number(b.mode);
-    if (!Number.isInteger(mode) || mode < 1 || mode > 7) {
-      return send(res, 400, { error: "bad_mode", message: "모드는 1~7 중 하나여야 합니다." });
+    if (!Number.isInteger(mode) || mode < 1 || mode > 9) {
+      return send(res, 400, { error: "bad_mode", message: "모드는 1~9 중 하나여야 합니다." });
     }
     if (isStateLocal()) {
       const prev = memState.mode;
@@ -371,6 +371,60 @@ async function handler(req, res) {
       return send(res, 400, { error: data.error });
     }
     return send(res, 200, { number: data.number, taken: data.taken || [] });
+  }
+
+  // first come, first served: a phone that arrives gets the lowest free number (1, 2, 3 … 40).
+  // The same phone (same client id) always gets its number back.
+  if (route === "POST /api/claim/auto") {
+    const b = await getJson(req);
+    if (!validClient(b.client)) return send(res, 400, { error: "client" });
+    if (isStateLocal()) {
+      const existing = memClaimByClient.get(b.client);
+      if (existing) return send(res, 200, { number: existing, taken: memTakenList() });
+      for (let n = 1; n <= 40; n++) {
+        if (memClaimByNum.has(n)) continue;
+        memClaimByNum.set(n, b.client);
+        memClaimByClient.set(b.client, n);
+        return send(res, 200, { number: n, taken: memTakenList() });
+      }
+      return send(res, 409, { error: "full", message: "40명이 모두 들어왔어요.", taken: memTakenList() });
+    }
+    let { data: rows, error: listErr } = await supabase
+      .from("show_claims")
+      .select("num, client_id")
+      .order("num", { ascending: true });
+    if (listErr) {
+      return send(res, 503, { error: "no_claims", message: "show_claims 테이블이 없습니다. supabase-schema.sql 을 실행해주세요." });
+    }
+    let list = rows || [];
+    const mineRow = list.find((r) => r.client_id === b.client);
+    if (mineRow) {
+      return send(res, 200, { number: mineRow.num, taken: list.map((r) => r.num) });
+    }
+    let taken = list.map((r) => r.num);
+    for (let n = 1; n <= 40; n++) {
+      if (taken.includes(n)) continue;
+      const { data, error } = await supabase.rpc("claim_show_number", {
+        p_client: b.client,
+        p_number: n,
+      });
+      if (error) {
+        return send(res, 503, { error: "no_claims", message: "claim_show_number 함수가 없습니다. supabase-schema.sql 을 실행해주세요." });
+      }
+      if (data && !data.error) {
+        return send(res, 200, { number: data.number, taken: data.taken || [] });
+      }
+      if (data && data.error !== "taken") {
+        return send(res, 400, { error: data.error });
+      }
+      const { data: retryRows } = await supabase.from("show_claims").select("num, client_id").order("num", { ascending: true });
+      list = retryRows || [];
+      const retryMine = list.find((r) => r.client_id === b.client);
+      if (retryMine) return send(res, 200, { number: retryMine.num, taken: list.map((r) => r.num) });
+      taken = list.map((r) => r.num);
+      n = 0;
+    }
+    return send(res, 409, { error: "full", message: "40명이 모두 들어왔어요.", taken });
   }
 
   if (route === "POST /api/claims/reset") {

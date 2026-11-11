@@ -666,6 +666,27 @@ async function api(req, res, url) {
     return send(res, 200, { number: r.number, taken: r.taken });
   }
 
+  // first come, first served: a phone that arrives gets the lowest free number (1, 2, 3 … 40).
+  // The same phone (same client id) always gets its number back.
+  if (route === "POST /api/claim/auto") {
+    const b = await readJson(req);
+    if (!validClient(b.client)) return send(res, 400, { error: "client" });
+    let snap = await dbGetClaims(b.client);
+    if (snap.mine) return send(res, 200, { number: snap.mine, taken: snap.taken });
+    for (let n = 1; n <= 40; n++) {
+      if (snap.taken.includes(n)) continue;
+      const r = await dbClaimNumber(b.client, n);
+      if (!r.error) {
+        broadcastClaims(r.taken);
+        return send(res, 200, { number: r.number, taken: r.taken });
+      }
+      if (r.error !== "taken") return send(res, 400, { error: r.error });
+      snap = await dbGetClaims(b.client); // someone took it a moment earlier: look again
+      n = 0;
+    }
+    return send(res, 409, { error: "full", message: "40명이 모두 들어왔어요.", taken: snap.taken });
+  }
+
   if (route === "POST /api/claims/reset") {
     const r = await dbResetClaims();
     if (r.error === "unauthorized") {
@@ -680,8 +701,8 @@ async function api(req, res, url) {
   if (route === "POST /api/state") {
     const b = await readJson(req);
     const mode = Number(b.mode);
-    if (!Number.isInteger(mode) || mode < 1 || mode > 7) {
-      return send(res, 400, { error: "bad_mode", message: "모드는 1~7 중 하나여야 합니다." });
+    if (!Number.isInteger(mode) || mode < 1 || mode > 9) {
+      return send(res, 400, { error: "bad_mode", message: "모드는 1~9 중 하나여야 합니다." });
     }
     const r = await dbSetMode(mode);
     if (r.error === "unauthorized") {

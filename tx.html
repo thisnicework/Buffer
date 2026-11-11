@@ -144,7 +144,9 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 4, ch: "챕터 1", d: "카운트다운 유지 · 스피커: 인물들의 파편적인 발화" },
     { n: 5, ch: "챕터 2", d: "미니패널: 개인번호 · 스피커: 파편적인 발화" },
     { n: 6, ch: "챕터 3", d: "버튼 누르면 소리 · 개인번호 · 음계 단음" },
-    { n: 7, ch: "챕터 3", d: "버튼 누르면 소리 · 개인번호 옆 도형 ● △ □ · 음계 단음" },
+    { n: 7, ch: "챕터 3", d: "버튼 누르면 소리 · 개인번호 옆 도형 ● △ □ ☆ · 음계 단음" },
+    { n: 8, ch: "챕터 4", d: "미니패널 꺼짐 · 버튼 누르면 번호마다 정해진 메인사운드 (9개 랜덤 배정)" },
+    { n: 9, ch: "챕터 4", d: "미니패널 꺼짐 · 버튼 누르면 띵동" },
   ];
   const $ = (id) => document.getElementById(id);
   let state = null, offset = 0, pending = null, busy = false;
@@ -223,7 +225,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     }
   }
 
-  $("next").addEventListener("click", () => { if (state && state.mode < 7) setMode(state.mode + 1); });
+  $("next").addEventListener("click", () => { if (state && state.mode < MODES.length) setMode(state.mode + 1); });
 
   list.addEventListener("click", (e) => {
     const b = e.target.closest(".mode");

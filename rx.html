@@ -137,7 +137,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 /* iOS compact picker look: grey rounded pill, value turns blue while the wheel is open */
 .picker-trigger{
   display:flex;align-items:center;justify-content:center;min-width:52px;
-  padding:7px 12px;border:0;border-radius:8px;background:rgba(118,118,128,.12);color:inherit;cursor:pointer;
+  padding:7px 12px;border:0;border-radius:8px;background:rgba(118,118,128,.12);color:inherit;cursor:default;
   font:400 17px/1.2 "Helvetica Neue",Helvetica,Arial,sans-serif;
   letter-spacing:normal;font-variant-numeric:tabular-nums;
   transition:color .15s ease,background-color .15s ease;
@@ -282,7 +282,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   </div>
 <div class="picker" id="picker">
   <button type="button" class="picker-trigger" id="picker-trigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="picker-wheel">
-    <span id="picker-value">번호</span>
+    <span id="picker-value">–</span>
   </button>
   <div class="picker-panel">
     <div class="picker-view">
@@ -324,7 +324,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     });
   };
   const two = (n) => String(n).padStart(2, "0");
-  const showLabel = () => { label.textContent = isOpen() ? two(value) : committed ? two(committed) : "번호"; };
+  const showLabel = () => { label.textContent = isOpen() ? two(value) : committed ? two(committed) : "–"; }; // "–" = no number yet (or all 40 taken)
   const refreshDone = (msg) => {
     const blocked = taken.has(value);
     done.disabled = blocked || busy;
@@ -389,7 +389,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     }
   }
 
-  trigger.addEventListener("click", () => (isOpen() ? close() : open()));
+  // numbers are now handed out first come, first served, so the pill only shows this phone's number
+  trigger.setAttribute("aria-haspopup", "false");
+  trigger.setAttribute("aria-label", "내 번호");
   done.addEventListener("click", confirm);
   document.addEventListener("pointerdown", (e) => { if (!root.contains(e.target)) close(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
@@ -531,13 +533,13 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 //   1, 5, 6  personal number      2  blank      3, 4  800-second countdown      7  number + its shape
 (() => {
   const oled = document.getElementById("oled-num");
-  // mode 7: each number gets a small ● △ □ (Helvetica glyphs) beside it, shuffled once with a fixed seed
-  // so a number always shows the same shape. 14 circles, 13 triangles, 13 squares.
+  // mode 7: each number gets a ● △ □ ☆, 10 numbers each, shuffled once with a fixed seed so a number
+  // always shows the same shape and neighbouring numbers never share one.
   const SHAPE_OF = [null,
-    "△","□","●","△","●","●","□","□","●","△",
-    "□","●","△","□","△","●","●","□","△","△",
-    "●","□","●","△","●","△","●","●","□","□",
-    "□","△","□","□","△","●","●","△","□","△"];
+    "△","●","☆","□","●","△","☆","△","●","□",
+    "●","□","△","☆","●","☆","●","□","☆","□",
+    "☆","△","□","●","☆","△","●","☆","△","□",
+    "△","□","●","△","☆","□","△","●","☆","□"];
   let number = null, state = null, offset = 0, last = null; // number: this phone's confirmed 1~40 (null until chosen)
 
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
@@ -546,14 +548,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // single-line modes fill the panel edge to edge (see fitText); no number yet: the panel stays dark
     const num = number ? String(number).padStart(2, "0") : ""; // 01~09: same two-digit look as 10~40
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
-    if (mode === 2) html = "";
+    if (mode === 2 || mode === 8 || mode === 9) html = ""; // chapter 4: panel stays dark
     else if ((mode === 3 || mode === 4) && state.timerStartedAtMs) html = `<span class="oled-fit" data-ref="888">${remaining()}</span>`; // sized for the widest 3 digits so it doesn't jump each second
     else if ((mode === 6 || mode === 7) && number) {
       // chapter 3, stacked and centred: number / shape (mode 7 only) / note name
       const shape = mode === 7 ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
       html = `<span class="oled-line"><span class="oled-n">${num}</span>${shape}<span class="oled-note">${NOTE_OF[number]}</span></span>`;
     }
-    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); if (mode === 6) fitStack(); else if (mode === 7) centerLines(oled.querySelector(".oled-line")); }
+    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); if (mode === 6 || mode === 7) fitStack(); }
   }
 
   // Mode 6 (number over note): grow the whole stack until its widest line's ink spans FILL of the panel
@@ -639,8 +641,15 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const prev = inkBox(items[i - 1]), cur = inkBox(items[i]);
       items[i].style.marginTop = (GAP * N - (prev.fs - prev.bottom) - cur.top).toFixed(2) + "px";
     }
+    // optical correction: a △ is all point at the top and all base at the bottom, so equal measured gaps
+    // read as a big gap above it and a cramped one below. Lift it a little so both gaps look the same.
+    if (shape && shape.textContent === "△" && shape.nextElementSibling) {
+      const lift = 0.08 * H;
+      shape.style.marginTop = (parseFloat(shape.style.marginTop) - lift).toFixed(2) + "px";
+      shape.nextElementSibling.style.marginTop = (parseFloat(shape.nextElementSibling.style.marginTop) + lift).toFixed(2) + "px";
+    }
   }
-  window.rxSetNumber = (n) => { number = n; paint(); };
+  window.rxSetNumber = (n) => { number = n; paint(); syncAnnouncement(); }; // mode 4's voice depends on the number
 
   // ---- one phone per number: a random id kept on this phone, so a reload keeps the same number ----
   const CLIENT = (() => {
@@ -653,9 +662,27 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     return id;
   })();
   const applyClaims = (taken, mine) => {
-    if (mine !== undefined && mine !== number) { number = mine; window.rxPicker.setCommitted(mine); paint(); } // undefined = keep ours
+    if (mine !== undefined && mine !== number) { number = mine; window.rxPicker.setCommitted(mine); paint(); syncAnnouncement(); } // undefined = keep ours
     window.rxPicker.setTaken(taken, number);
+    if (!number && taken.length < 40) autoClaim(); // no number yet (first visit, or /tx reset them all): take the next one
   };
+
+  // First come, first served: the server hands this phone the lowest free number (1, 2, 3 … 40).
+  // The same phone keeps its number across reloads. If all 40 are taken it stays without one.
+  let claiming = false;
+  async function autoClaim() {
+    if (claiming) return;
+    claiming = true;
+    try {
+      const r = await fetch("/api/claim/auto", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client: CLIENT }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.number) { claiming = false; applyClaims(j.taken, j.number); return; }
+    } catch (_) { /* no server (shared preview link): no number */ }
+    claiming = false;
+  }
   window.rxClaim = async (n) => {
     try {
       const r = await fetch("/api/claim", {
@@ -707,28 +734,45 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // mode, timed on the server clock so every phone starts together (polling lag doesn't matter); a phone
   // that arrives late joins mid-track. Switching mode stops the old track; entering a mode starts its track
   // from the top. Browsers only allow sound after a tap, so the first tap anywhere unlocks it.
+  // 파편적인 발화 voices. 지민 = 김지민.wav up to 61.8 s (cut inside the 61.2–63.3 s speech pause);
+  // 김수아.wav cut at 60.9 s (inside the 60.0–61.1 s pause), 봄 1.wav cut at 61.0 s (inside the 60.0–61.2 s pause). In mode 4 each number hears one of the three,
+  // shuffled once with a fixed seed (지민 14, 수아 13, 봄 13) so it looks scattered: never 3 in a row,
+  // no ABAB patterns, every block of ten mixes all three. Mode 5 uses the same assignment.
+  const VOICE = {
+    J: "/assets/rx/mode45-voices.mp3",
+    S: "/assets/rx/mode4-voice-sua.mp3",
+    B: "/assets/rx/mode4-voice-bom.mp3",
+  };
+  const VOICE_OF = [null,
+    "J","J","B","S","J","J","B","J","S","B",
+    "J","J","S","J","B","S","S","B","S","S",
+    "B","S","J","J","B","B","J","J","S","B",
+    "S","B","J","B","J","S","S","B","S","B"];
   const TRACKS = {
     2: { src: "/assets/rx/mode2-announcement.mp3", delay: 3000 }, // 공연 안내 멘트 (최승원.wav)
-    // 파편적인 발화 (김지민.wav up to 61.8 s, cut inside the 61.2–63.3 s speech pause): restarts on entering 4 and again on 5
-    4: { src: "/assets/rx/mode45-voices.mp3", delay: 2000 },
-    5: { src: "/assets/rx/mode45-voices.mp3", delay: 2000 },
+    // modes 4 and 5: each number hears its own voice; restarts on entering 4 and again on 5; no number chosen yet -> 지민
+    4: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 2000 },
+    5: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 2000 },
   };
+  const srcOf = (t) => (typeof t.src === "function" ? t.src() : t.src);
   const players = {};
-  for (const t of Object.values(TRACKS)) {
-    if (!players[t.src]) { players[t.src] = new Audio(t.src); players[t.src].preload = "auto"; }
+  for (const src of [TRACKS[2].src, ...Object.values(VOICE)]) {
+    players[src] = new Audio(src);
+    players[src].preload = "auto";
   }
   const stopAll = () => Object.values(players).forEach((a) => a.pause());
   let trackKey = null, trackTimer = null;
   function syncAnnouncement() {
     const t = state && TRACKS[state.mode];
     const from = t ? (t.from && state[t.from]) || state.updatedAtMs : null; // when this run began on the server
-    const key = t ? t.src + ":" + from : null;
+    const src = t ? srcOf(t) : null;
+    const key = t ? src + ":" + from : null;
     if (key === trackKey) return; // same run as before (e.g. 4 -> 5): keep playing
     trackKey = key;
     clearTimeout(trackTimer);
     stopAll();
     if (!t) return;
-    const audio = players[t.src], startAt = from + t.delay;
+    const audio = players[src], startAt = from + t.delay;
     const start = () => {
       const late = (Date.now() + offset - startAt) / 1000;
       if (audio.duration && late >= audio.duration) return; // it already finished for everyone else
@@ -766,13 +810,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   pull();
 
   // Pressing the cap plays this person's note, a short single tone.
-  // 12 notes C4..B4 including the black keys, each used 3 times (C4, D4, F#4, A4 4 times) across 1~40,
-  // shuffled once with a fixed seed so a number always keeps the same note on every phone.
+  // Only 도 미 솔 라 (C4 E4 G4 A4), 10 numbers each, shuffled once with a fixed seed so it looks scattered
+  // (never 3 in a row, every block of ten has all four). A number keeps the same note on every phone, and
+  // the OLED shows this same note name in modes 6 and 7.
   const NOTE_OF = [null,
-    "G#4","F4","C4","D#4","B4","F#4","B4","G4","E4","A#4",
-    "D4","C4","F#4","G4","D#4","C#4","G#4","G#4","F4","C4",
-    "F4","A4","D4","E4","D4","C#4","E4","A#4","C#4","A4",
-    "F#4","F#4","A4","G4","C4","A#4","A4","B4","D#4","D4"];
+    "G4","A4","A4","C4","A4","E4","C4","E4","G4","E4",
+    "E4","C4","C4","E4","G4","G4","A4","C4","E4","G4",
+    "G4","A4","G4","E4","C4","E4","E4","G4","A4","C4",
+    "C4","A4","C4","A4","A4","G4","E4","G4","A4","C4"];
   const SEMI = { C: 0, "C#": 1, D: 2, "D#": 3, E: 4, F: 5, "F#": 6, G: 7, "G#": 8, A: 9, "A#": 10, B: 11 };
   const freq = (note) => {
     const [, name, oct] = /^([A-G]#?)(\d)$/.exec(note);
@@ -802,9 +847,50 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     } catch (_) { /* no audio support: the press still animates */ }
   }
   // the cap only sounds in chapter 3 (modes 6, 7); in modes 1~5 the press just animates
+  // Chapter 4, mode 8: each number owns one of the 9 main sounds (지원 지민 승환 승영 세령 선율 봄 민 수아),
+  // shuffled once with a fixed seed: 4–5 numbers per sound, never the same sound on neighbouring numbers.
+  // Every press plays this phone's sound from the top. Only that one file loads, once the show reaches mode 8.
+  const MAIN_OF = [null,
+    "seunghwan","jiwon","min","seryeong","bom","sua","seonyul","jiwon","seonyul","jimin",
+    "seryeong","jimin","seungyoung","min","seungyoung","bom","sua","jiwon","sua","seunghwan",
+    "jimin","seonyul","bom","min","seonyul","sua","seunghwan","bom","jimin","jiwon",
+    "min","seungyoung","seryeong","seungyoung","seonyul","seunghwan","jiwon","sua","seryeong","min"];
+  const mainSrc = () => (number ? `/assets/rx/mode8-${MAIN_OF[number]}.mp3` : null); // no number chosen: silent
+  const mainPlayers = {};
+  let nowMain = null;
+  function mainPlayer(src) {
+    if (!mainPlayers[src]) { mainPlayers[src] = new Audio(src); mainPlayers[src].preload = "auto"; }
+    return mainPlayers[src];
+  }
+  function playMain() {
+    const src = mainSrc();
+    if (!src) return;
+    if (nowMain) nowMain.pause();
+    nowMain = mainPlayer(src);
+    try { nowMain.currentTime = 0; } catch (_) {}
+    nowMain.play().catch(() => {});
+  }
+  // Mode 9: every press plays the 띵동 (띵동 변조 2.wav) from the top, same for everyone.
+  const DINGDONG = "/assets/rx/mode9-dingdong.mp3";
+  function playDingdong() {
+    if (nowMain) nowMain.pause();
+    nowMain = mainPlayer(DINGDONG);
+    try { nowMain.currentTime = 0; } catch (_) {}
+    nowMain.play().catch(() => {});
+  }
+  function syncMain() {
+    const mode = state ? state.mode : 1;
+    if (mode === 8) { const src = mainSrc(); if (src) mainPlayer(src); } // start downloading this phone's sound
+    else if (mode === 9) mainPlayer(DINGDONG);
+    if (nowMain && mode !== 8 && mode !== 9) { nowMain.pause(); nowMain = null; } // leaving chapter 4 silences it
+  }
+  setInterval(syncMain, 500);
+
   document.addEventListener("rx-press", () => {
     const mode = state ? state.mode : 1;
     if ((mode === 6 || mode === 7) && number) play(NOTE_OF[number]);
+    else if (mode === 8) playMain();
+    else if (mode === 9) playDingdong();
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });
 })();
