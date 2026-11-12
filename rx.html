@@ -810,7 +810,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   pull();
 
   // Pressing the cap plays this person's note: the recorded "sos 음정" set C, D, Eb, G, Bb (C.wav … Bb.wav),
-  // each sustained to ring about 2 s (steady part looped on whole pitch periods, then the natural decay),
+  // each rebuilt as a steady 2 s tone (its partials measured by FFT and resynthesised at constant level,
+  // original 60 ms attack kept, 120 ms release), so a press sounds as one even "삐-----",
   // 8 numbers each, shuffled once with a fixed seed (never the same note on neighbouring numbers, every
   // block of ten has all five). A number keeps the same note on every phone, and the OLED shows this
   // same note name in modes 6 and 7.
