@@ -770,8 +770,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // mode, timed on the server clock so every phone starts together (polling lag doesn't matter); a phone
   // that arrives late joins mid-track. Switching mode stops the old track; entering a mode starts its track
   // from the top. Browsers only allow sound after a tap, so the first tap anywhere unlocks it.
-  // 파편적인 발화 voices. 지민 = 김지민.wav up to 61.8 s (cut inside the 61.2–63.3 s speech pause);
-  // 김수아.wav cut at 60.9 s (inside the 60.0–61.1 s pause), 봄 1.wav cut at 61.0 s (inside the 60.0–61.2 s pause). In mode 4 each number hears one of the three,
+  // 파편적인 발화 voices, full length and looping while modes 4/5 last: 지민 = 김지민.wav (136.5 s),
+  // 수아 = 김수아.wav (101.7 s), 봄 = 봄 1.wav (134.5 s). In mode 4 each number hears one of the three,
   // shuffled once with a fixed seed (지민 14, 수아 13, 봄 13) so it looks scattered: never 3 in a row,
   // no ABAB patterns, every block of ten mixes all three. Mode 5 uses the same assignment.
   const VOICE = {
@@ -796,6 +796,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     players[src] = new Audio(src);
     players[src].preload = "auto";
   }
+  for (const src of Object.values(VOICE)) players[src].loop = true; // 파편적인 발화: repeat until the mode changes
   const stopAll = () => Object.values(players).forEach((a) => a.pause());
   let trackKey = null, trackTimer = null;
   function syncAnnouncement() {
@@ -810,8 +811,20 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (!t) return;
     const audio = players[src], startAt = from + t.delay;
     const start = () => {
-      const late = (Date.now() + offset - startAt) / 1000;
-      if (audio.duration && late >= audio.duration) return; // it already finished for everyone else
+      if (trackKey !== key) return; // the mode changed while we waited
+      let late = (Date.now() + offset - startAt) / 1000;
+      if (audio.loop) {
+        // looping voice: a phone that arrives late joins at the same point in the loop as everyone else.
+        // Length unknown yet (iPhones don't preload): start playing, then seek once the length arrives.
+        if (!audio.duration) {
+          audio.addEventListener("loadedmetadata", () => {
+            if (trackKey !== key) return;
+            const l = (Date.now() + offset - startAt) / 1000;
+            try { audio.currentTime = l > 0 ? l % audio.duration : 0; } catch (_) {}
+          }, { once: true });
+          late = 0;
+        } else late = late > 0 ? late % audio.duration : 0;
+      } else if (audio.duration && late >= audio.duration) return; // it already finished for everyone else
       try { audio.currentTime = Math.max(0, late); } catch (_) {}
       audio.play().catch(() => {}); // blocked until the viewer has tapped once
     };
