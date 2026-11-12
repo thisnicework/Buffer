@@ -366,12 +366,40 @@ function warnClaimsOnce(msg) {
   console.warn(`⚠️  [Supabase] show_claims 를 쓸 수 없어 로컬 DB로 관객 번호를 저장합니다 (${msg}). supabase-schema.sql 5~11번을 실행하면 사라집니다.`);
 }
 
+// 모드는 1~11. Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
+// reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고 show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다.
+const MODE_MAX = 11;
+const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
+async function dbGetModeRow() {
+  try {
+    const { data, error } = await supabase.from("reservations").select("seat").eq("code", MODE_ROW.code).maybeSingle();
+    return !error && data ? data.seat : null;
+  } catch (_) { return null; }
+}
+async function dbSetModeRow(mode) {
+  try {
+    const { data, error } = await supabase.from("reservations").update({ seat: mode }).eq("code", MODE_ROW.code).select("id");
+    if (error) return error.message;
+    if (!data || !data.length) {
+      const ins = await supabase.from("reservations").insert({ ...MODE_ROW, seat: mode, created_at: new Date().toISOString() });
+      if (ins.error) return ins.error.message;
+    }
+    return null;
+  } catch (e) { return e.message; }
+}
+
 async function dbGetState() {
   if (supabase && !STATE_LOCAL) {
     try {
-      const { data, error } = await supabase.from("show_state").select("mode, timer_started_at, updated_at").eq("id", 1).maybeSingle();
+      const [{ data, error }, rowMode] = await Promise.all([
+        supabase.from("show_state").select("mode, timer_started_at, updated_at").eq("id", 1).maybeSingle(),
+        dbGetModeRow(),
+      ]);
       if (!error && data) {
-        const normalized = (data.mode === 9 && !data.timer_started_at) ? { ...data, mode: 10 } : data;
+        // real mode 1~11 lives in the marker row; before it exists: old 9 -> 10, old 10 (9 without timer) -> 11
+        const normalized = rowMode ? { ...data, mode: rowMode }
+          : data.mode === 9 ? { ...data, mode: data.timer_started_at ? 10 : 11 }
+          : data.mode === 10 ? { ...data, mode: 11 } : data;
         sqliteQueries.setState.run(normalized.mode, normalized.timer_started_at || null, normalized.updated_at);
         return normalized;
       }
@@ -387,19 +415,9 @@ async function dbGetState() {
 async function dbSetMode(mode) {
   if (supabase && !STATE_LOCAL) {
     try {
-      let { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
-      if (mode === 9 && !error && data && !data.error && !data.timer_started_at) {
-        await supabase.rpc("set_show_mode", { p_mode: 3, p_secret: SHOW_SECRET });
-        const r9 = await supabase.rpc("set_show_mode", { p_mode: 9, p_secret: SHOW_SECRET });
-        if (!r9.error && r9.data && !r9.data.error) data = r9.data;
-      } else if (mode === 10 && ((data && data.error === "bad_mode") || error)) {
-        await supabase.rpc("set_show_mode", { p_mode: 1, p_secret: SHOW_SECRET });
-        const r10 = await supabase.rpc("set_show_mode", { p_mode: 9, p_secret: SHOW_SECRET });
-        if (!r10.error && r10.data && !r10.data.error) {
-          error = null;
-          data = { ...r10.data, mode: 10 };
-        }
-      }
+      const rowErr = await dbSetModeRow(mode);
+      let { data, error } = rowErr ? { error: { message: rowErr } } : await supabase.rpc("set_show_mode", { p_mode: Math.min(mode, 8), p_secret: SHOW_SECRET });
+      if (!error && data && !data.error) data = { ...data, mode };
       if (!error && data && !data.error) {
         sqliteQueries.setState.run(data.mode, data.timer_started_at || null, data.updated_at);
         return data;
@@ -797,8 +815,8 @@ async function api(req, res, url) {
   if (route === "POST /api/state") {
     const b = await readJson(req);
     const mode = Number(b.mode);
-    if (!Number.isInteger(mode) || mode < 1 || mode > 10) {
-      return send(res, 400, { error: "bad_mode", message: "모드는 1~10 중 하나여야 합니다." });
+    if (!Number.isInteger(mode) || mode < 1 || mode > MODE_MAX) {
+      return send(res, 400, { error: "bad_mode", message: `모드는 1~${MODE_MAX} 중 하나여야 합니다.` });
     }
     const r = await dbSetMode(mode);
     if (mode === 7 && !r.error) await dbSetStep(0); // entering mode 7: every number starts muted
