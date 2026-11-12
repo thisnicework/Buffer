@@ -533,13 +533,13 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 //   1, 5, 6  personal number      2  blank      3, 4  800-second countdown      7  number + its shape
 (() => {
   const oled = document.getElementById("oled-num");
-  // mode 7: each number gets a ● △ □ ☆, 10 numbers each, shuffled once with a fixed seed so a number
+  // mode 7: each number gets a ○ △ □ ☆, 10 numbers each, shuffled once with a fixed seed so a number
   // always shows the same shape and neighbouring numbers never share one.
   const SHAPE_OF = [null,
-    "△","●","☆","□","●","△","☆","△","●","□",
-    "●","□","△","☆","●","☆","●","□","☆","□",
-    "☆","△","□","●","☆","△","●","☆","△","□",
-    "△","□","●","△","☆","□","△","●","☆","□"];
+    "△","○","☆","□","○","△","☆","△","○","□",
+    "○","□","△","☆","○","☆","○","□","☆","□",
+    "☆","△","□","○","☆","△","○","☆","△","□",
+    "△","□","○","△","☆","□","△","○","☆","□"];
   let number = null, state = null, offset = 0, last = null; // number: this phone's confirmed 1~40 (null until chosen)
 
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
