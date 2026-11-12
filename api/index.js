@@ -20,13 +20,14 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "https://qatrsegoqwandtsasunp.s
 const SUPABASE_KEY = process.env.SUPABASE_KEY || "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
 
-const DEFAULT_SEATS = { A: 26, B: 26, C: 32, D: 32 };
+const DEFAULT_SEATS = { A: 26, B: 26, C: 32, D: 31 };
 const SEATS = (() => {
   const m = { ...DEFAULT_SEATS };
   for (const part of String(process.env.SEATS || "").split(",")) {
     const r = /^\s*([A-D])\s*=\s*(\d{1,2})\s*$/i.exec(part);
     if (r) m[r[1].toUpperCase()] = Number(r[2]);
   }
+  m.D = 31; // 4회차(11.15 일 7PM): 기존 25매 + 추가 6매 = 총 31매 한정 오픈
   return m;
 })();
 
@@ -37,7 +38,7 @@ const SHOWS = [
   { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM" },
 ];
 const SHOW_IDS = new Set(SHOWS.map((s) => s.id));
-const SOLD_OUT_SHOWS = new Set(["A", "B", "C", "D"]); // 전 회차 매진 처리
+const SOLD_OUT_SHOWS = new Set(["B", "C"]); // 2회차(11.14 토 7PM), 3회차(11.15 일 3PM) 매진 처리
 
 const pad = (n) => (n < 10 ? "0" : "") + n;
 const isOpen = () => Date.now() >= OPEN_AT;

@@ -36,8 +36,8 @@ const supabase = hasSupabase
   ? createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } })
   : null;
 
-// 회차별 좌석 수: 기본값 1·2회차(A·B) 26매, 3·4회차(C·D) 32매. SEATS="A=26,B=26,C=32,D=32" 처럼 환경변수로도 지정 가능
-const DEFAULT_SEATS = { A: 26, B: 26, C: 32, D: 32 };
+// 회차별 좌석 수: 기본값 1·2회차(A·B) 26매, 3회차(C) 32매, 4회차(D) 31매(기존 25매 + 추가 6매). SEATS="A=26,B=26,C=32,D=31" 처럼 환경변수로도 지정 가능
+const DEFAULT_SEATS = { A: 26, B: 26, C: 32, D: 31 };
 const SEATS = (() => {
   const m = { ...DEFAULT_SEATS };
   for (const part of String(process.env.SEATS || "").split(",")) {
@@ -45,6 +45,7 @@ const SEATS = (() => {
     if (r) m[r[1].toUpperCase()] = Number(r[2]);
     else if (part.trim()) { console.error(`SEATS 형식이 올바르지 않습니다: "${part}" (예: A=26,B=26,C=32,D=32)`); process.exit(1); }
   }
+  m.D = 31; // 4회차(11.15 일 7PM): 기존 25매 + 추가 6매 = 총 31매 한정 오픈
   return m;
 })();
 
@@ -60,7 +61,7 @@ const SHOWS = [
   { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM" },
 ];
 const SHOW_IDS = new Set(SHOWS.map((s) => s.id));
-const SOLD_OUT_SHOWS = new Set(["A", "B", "C", "D"]); // 전 회차 매진 처리
+const SOLD_OUT_SHOWS = new Set(["B", "C"]); // 2회차(11.14 토 7PM), 3회차(11.15 일 3PM) 매진 처리
 
 if (!Number.isFinite(OPEN_AT)) {
   console.error("OPEN_AT 형식이 올바르지 않습니다. 예: 2026-11-04T20:00:00+09:00");
