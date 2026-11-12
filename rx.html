@@ -884,7 +884,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // 8 numbers each, shuffled once with a fixed seed (never the same note on neighbouring numbers, every
   // block of ten has all five). A number keeps the same note on every phone, and the OLED shows this
   // same note name in modes 7 and 8 (defined in NOTE_OF above, matched 1-to-1 with SHAPE_OF).
-  // Mode 10 uses the same notes as steady 3 s versions (mode10-hold-*.mp3); their loudness follows the shared fade.
+  // Mode 10 uses the same notes as steady 4 s versions (1 s hold + 3 s fade; mode10-hold-*.mp3); their loudness follows the shared fade.
   const notePlayers = {};
   const notePlayer = (note) => {
     const src = `/assets/rx/mode67-note-${note}.mp3`;
@@ -910,8 +910,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // The fade plays through Web Audio buffers, since iPhones ignore audio.volume. The <audio> elements are never
   // routed into Web Audio (that made some phones sound a note twice): a note still sounding at the switch is
   // handed over to a buffer copy of itself at the same position, and that copy fades.
-  const FADE_S = 3;
-  const fadeEnd = () => (state && state.mode === 10 ? state.updatedAtMs + FADE_S * 1000 : 0); // server ms
+  // HOLD_S at full level first (phones can hear about the switch a moment late), then the FADE_S fade.
+  const HOLD_S = 1, FADE_S = 3;
+  const fadeStart = () => (state && state.mode === 10 ? state.updatedAtMs + HOLD_S * 1000 : 0); // server ms
+  const fadeEnd = () => (state && state.mode === 10 ? fadeStart() + FADE_S * 1000 : 0);
   const fadeLevel = () => Math.max(0, Math.min(1, (fadeEnd() - (Date.now() + offset)) / (FADE_S * 1000)));
   let actx = null;
   const wakeAudio = () => {
@@ -937,15 +939,18 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   let buf = null; // the fading copy: { node, endAt (context time) }
   const bufSounding = () => !!(buf && actx && actx.currentTime < buf.endAt);
   function stopBuf() { if (buf) { try { buf.node.stop(); } catch (_) {} buf = null; } }
-  // play src from offsetS, starting at level `from` (default: the fade's level now) and reaching 0 when the fade ends
+  // play src from offsetS, starting at level `from` (default: the fade's level now), holding until the fade
+  // starts and reaching 0 when it ends
   function fadeBuf(src, offsetS, from) {
     const b = ready[src], k = fadeLevel();
     if (!b || !actx || actx.state !== "running" || k <= 0) return false;
     stopBuf();
-    const node = actx.createBufferSource(), gain = actx.createGain(), t = actx.currentTime, end = t + k * FADE_S;
+    const now = Date.now() + offset, node = actx.createBufferSource(), gain = actx.createGain(), t = actx.currentTime;
+    const hold = t + Math.max(0, fadeStart() - now) / 1000, end = t + Math.max(0, fadeEnd() - now) / 1000;
     const at = Math.min(Math.max(0, offsetS), b.duration);
     node.buffer = b;
     gain.gain.setValueAtTime(from === undefined ? k : from, t);
+    if (hold > t) gain.gain.setValueAtTime(from === undefined ? k : from, hold);
     gain.gain.linearRampToValueAtTime(0, end);
     node.connect(gain).connect(actx.destination);
     node.start(t, at);
