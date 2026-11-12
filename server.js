@@ -701,8 +701,8 @@ async function api(req, res, url) {
   if (route === "POST /api/state") {
     const b = await readJson(req);
     const mode = Number(b.mode);
-    if (!Number.isInteger(mode) || mode < 1 || mode > 9) {
-      return send(res, 400, { error: "bad_mode", message: "모드는 1~9 중 하나여야 합니다." });
+    if (!Number.isInteger(mode) || mode < 1 || mode > 10) {
+      return send(res, 400, { error: "bad_mode", message: "모드는 1~10 중 하나여야 합니다." });
     }
     const r = await dbSetMode(mode);
     if (r.error === "unauthorized") {

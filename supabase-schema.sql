@@ -94,16 +94,16 @@ GRANT EXECUTE ON FUNCTION public.book_ticket(TEXT, TEXT, TEXT, INTEGER) TO anon,
 -- ==============================================================================
 
 -- 5. 현재 공연 상태 (행 하나만 존재)
---    mode: 1~9 (DEVICE 표의 MODE)
+--    mode: 1~10 (DEVICE 표의 MODE)
 --    timer_started_at: 800초 카운트다운 시작 시각. 모드 3 진입 시 기록되며 모드 4는 그대로 이어간다.
 CREATE TABLE IF NOT EXISTS public.show_state (
   id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-  mode INTEGER NOT NULL DEFAULT 1 CHECK (mode BETWEEN 1 AND 9),
+  mode INTEGER NOT NULL DEFAULT 1 CHECK (mode BETWEEN 1 AND 10),
   timer_started_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE public.show_state DROP CONSTRAINT IF EXISTS show_state_mode_check;
-ALTER TABLE public.show_state ADD CONSTRAINT show_state_mode_check CHECK (mode BETWEEN 1 AND 9);
+ALTER TABLE public.show_state ADD CONSTRAINT show_state_mode_check CHECK (mode BETWEEN 1 AND 10);
 INSERT INTO public.show_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- 누구나 읽기 가능 (관객 휴대폰 /rx 가 실시간 구독). 쓰기는 set_show_mode 함수로만 허용.
@@ -141,7 +141,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.show_control WHERE id = 1 AND secret = p_secret) THEN
     RETURN jsonb_build_object('error', 'unauthorized');
   END IF;
-  IF p_mode IS NULL OR p_mode < 1 OR p_mode > 9 THEN
+  IF p_mode IS NULL OR p_mode < 1 OR p_mode > 10 THEN
     RETURN jsonb_build_object('error', 'bad_mode');
   END IF;
 

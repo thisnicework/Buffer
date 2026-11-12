@@ -533,7 +533,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 //   1, 5, 6  personal number      2  blank      3, 4  800-second countdown      7  number + its shape
 (() => {
   const oled = document.getElementById("oled-num");
-  // mode 7: each number gets a ○ △ □ ☆, 10 numbers each, shuffled once with a fixed seed so a number
+  // mode 8: each number gets a ○ △ □ ☆, 10 numbers each, shuffled once with a fixed seed so a number
   // always shows the same shape and neighbouring numbers never share one.
   const SHAPE_OF = [null,
     "△","○","☆","□","○","△","☆","△","○","□",
@@ -548,14 +548,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // single-line modes fill the panel edge to edge (see fitText); no number yet: the panel stays dark
     const num = number ? String(number).padStart(2, "0") : ""; // 01~09: same two-digit look as 10~40
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
-    if (mode === 2 || mode === 8 || mode === 9) html = ""; // chapter 4: panel stays dark
+    if (mode === 2 || mode === 6 || mode === 9 || mode === 10) html = ""; // mode 6 (everything off) and chapter 4: panel stays dark
     else if ((mode === 3 || mode === 4) && state.timerStartedAtMs) html = `<span class="oled-fit" data-ref="888">${remaining()}</span>`; // sized for the widest 3 digits so it doesn't jump each second
-    else if ((mode === 6 || mode === 7) && number) {
-      // chapter 3, stacked and centred: number / shape (mode 7 only) / note name
-      const shape = mode === 7 ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
+    else if ((mode === 7 || mode === 8) && number) {
+      // chapter 3, stacked and centred: number / shape (mode 8 only) / note name
+      const shape = mode === 8 ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
       html = `<span class="oled-line"><span class="oled-n">${num}</span>${shape}<span class="oled-note">${NOTE_OF[number]}</span></span>`;
     }
-    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); if (mode === 6 || mode === 7) fitStack(); }
+    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); if (mode === 7 || mode === 8) fitStack(); }
   }
 
   // Mode 6 (number over note): grow the whole stack until its widest line's ink spans FILL of the panel
@@ -814,7 +814,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // original 60 ms attack kept, 120 ms release), so a press sounds as one even "삐-----",
   // 8 numbers each, shuffled once with a fixed seed (never the same note on neighbouring numbers, every
   // block of ten has all five). A number keeps the same note on every phone, and the OLED shows this
-  // same note name in modes 6 and 7.
+  // same note name in modes 7 and 8.
   const NOTE_OF = [null,
     "G","Eb","G","C","Eb","C","G","D","Bb","D",
     "G","C","G","C","Bb","G","D","Bb","Eb","C",
@@ -838,10 +838,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     nowNote.play().catch(() => {});
   }
   // load this phone's note as soon as the show reaches chapter 3, so the first press sounds at once
-  setInterval(() => { const m = state ? state.mode : 1; if ((m === 6 || m === 7) && number) notePlayer(NOTE_OF[number]); }, 500);  // the cap only sounds in chapter 3 (modes 6, 7); in modes 1~5 the press just animates
-  // Chapter 4, mode 8: each number owns one of the 9 main sounds (지원 지민 승환 승영 세령 선율 봄 민 수아),
+  setInterval(() => { const m = state ? state.mode : 1; if ((m === 7 || m === 8) && number) notePlayer(NOTE_OF[number]); }, 500);  // the cap only sounds in chapter 3 (modes 7, 8) and chapter 4 (9, 10); in modes 1~6 the press just animates
+  // Chapter 4, mode 9: each number owns one of the 9 main sounds (지원 지민 승환 승영 세령 선율 봄 민 수아),
   // shuffled once with a fixed seed: 4–5 numbers per sound, never the same sound on neighbouring numbers.
-  // Every press plays this phone's sound from the top. Only that one file loads, once the show reaches mode 8.
+  // Every press plays this phone's sound from the top. Only that one file loads, once the show reaches mode 9.
   const MAIN_OF = [null,
     "seunghwan","jiwon","min","seryeong","bom","sua","seonyul","jiwon","seonyul","jimin",
     "seryeong","jimin","seungyoung","min","seungyoung","bom","sua","jiwon","sua","seunghwan",
@@ -863,7 +863,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     try { nowMain.currentTime = 0; } catch (_) {}
     nowMain.play().catch(() => {});
   }
-  // Mode 9: a press plays the 띵동 (띵동 변조 2.wav), same for everyone; presses during it are ignored.
+  // Mode 10: a press plays the 띵동 (띵동 변조 2.wav), same for everyone; presses during it are ignored.
   const DINGDONG = "/assets/rx/mode9-dingdong.mp3";
   function playDingdong() {
     const next = mainPlayer(DINGDONG);
@@ -874,17 +874,18 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   }
   function syncMain() {
     const mode = state ? state.mode : 1;
-    if (mode === 8) { const src = mainSrc(); if (src) mainPlayer(src); } // start downloading this phone's sound
-    else if (mode === 9) mainPlayer(DINGDONG);
-    if (nowMain && mode !== 8 && mode !== 9) { nowMain.pause(); nowMain = null; } // leaving chapter 4 silences it
+    if (mode === 9) { const src = mainSrc(); if (src) mainPlayer(src); } // start downloading this phone's sound
+    else if (mode === 10) mainPlayer(DINGDONG);
+    if (nowMain && mode !== 9 && mode !== 10) { nowMain.pause(); nowMain = null; } // leaving chapter 4 silences it
   }
   setInterval(syncMain, 500);
 
   document.addEventListener("rx-press", () => {
     const mode = state ? state.mode : 1;
-    if ((mode === 6 || mode === 7) && number) play(NOTE_OF[number]);
-    else if (mode === 8) playMain();
-    else if (mode === 9) playDingdong();
+    // mode 6 is "everything off": no panel, no sound on press
+    if ((mode === 7 || mode === 8) && number) play(NOTE_OF[number]);
+    else if (mode === 9) playMain();
+    else if (mode === 10) playDingdong();
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });
 })();
