@@ -129,6 +129,10 @@ async function readState(res) {
     send(res, 503, { error: "no_state", message: "show_state 테이블이 없습니다. supabase-schema.sql 을 실행해주세요." });
     return null;
   }
+  // Supabase 스키마가 아직 1~9로만 되어 있어도 mode=9 & timer_started_at=null 조합으로 모드 10을 구분
+  if (data.mode === 9 && !data.timer_started_at) {
+    return { ...data, mode: 10 };
+  }
   return data;
 }
 
@@ -311,7 +315,22 @@ async function handler(req, res) {
       memState.updated_at = new Date().toISOString();
       return send(res, 200, statePayload(memState));
     }
-    const { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
+    let { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
+    // Supabase DB가 아직 1~9까지만 허용하는 경우에도 모드 9와 모드 10이 모두 정상 동작하도록 자동 호환 처리:
+    // - 모드 9: timer_started_at 이 항상 존재하도록 보장 (mode=9, timer_started_at!=null -> 모드 9)
+    // - 모드 10: set_show_mode(1)로 timer_started_at을 null로 비운 뒤 set_show_mode(9) 호출 (mode=9, timer_started_at==null -> 모드 10)
+    if (mode === 9 && !error && data && !data.error && !data.timer_started_at) {
+      await supabase.rpc("set_show_mode", { p_mode: 3, p_secret: SHOW_SECRET });
+      const r9 = await supabase.rpc("set_show_mode", { p_mode: 9, p_secret: SHOW_SECRET });
+      if (!r9.error && r9.data && !r9.data.error) data = r9.data;
+    } else if (mode === 10 && ((data && data.error === "bad_mode") || error)) {
+      await supabase.rpc("set_show_mode", { p_mode: 1, p_secret: SHOW_SECRET });
+      const r10 = await supabase.rpc("set_show_mode", { p_mode: 9, p_secret: SHOW_SECRET });
+      if (!r10.error && r10.data && !r10.data.error) {
+        error = null;
+        data = { ...r10.data, mode: 10 };
+      }
+    }
     // say why it failed, so /tx shows something more useful than "요청 실패"
     if (error) return send(res, 503, { error: "no_state", message: `Supabase 모드 저장 실패: ${error.message}. supabase-schema.sql 5~7번을 다시 실행해주세요.` });
     if (data && data.error === "unauthorized") return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });

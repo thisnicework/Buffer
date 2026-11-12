@@ -368,8 +368,9 @@ async function dbGetState() {
     try {
       const { data, error } = await supabase.from("show_state").select("mode, timer_started_at, updated_at").eq("id", 1).maybeSingle();
       if (!error && data) {
-        sqliteQueries.setState.run(data.mode, data.timer_started_at || null, data.updated_at);
-        return data;
+        const normalized = (data.mode === 9 && !data.timer_started_at) ? { ...data, mode: 10 } : data;
+        sqliteQueries.setState.run(normalized.mode, normalized.timer_started_at || null, normalized.updated_at);
+        return normalized;
       }
       if (error) warnStateOnce(error.message);
     } catch (e) {
@@ -383,7 +384,19 @@ async function dbGetState() {
 async function dbSetMode(mode) {
   if (supabase && !STATE_LOCAL) {
     try {
-      const { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
+      let { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
+      if (mode === 9 && !error && data && !data.error && !data.timer_started_at) {
+        await supabase.rpc("set_show_mode", { p_mode: 3, p_secret: SHOW_SECRET });
+        const r9 = await supabase.rpc("set_show_mode", { p_mode: 9, p_secret: SHOW_SECRET });
+        if (!r9.error && r9.data && !r9.data.error) data = r9.data;
+      } else if (mode === 10 && ((data && data.error === "bad_mode") || error)) {
+        await supabase.rpc("set_show_mode", { p_mode: 1, p_secret: SHOW_SECRET });
+        const r10 = await supabase.rpc("set_show_mode", { p_mode: 9, p_secret: SHOW_SECRET });
+        if (!r10.error && r10.data && !r10.data.error) {
+          error = null;
+          data = { ...r10.data, mode: 10 };
+        }
+      }
       if (!error && data && !data.error) {
         sqliteQueries.setState.run(data.mode, data.timer_started_at || null, data.updated_at);
         return data;
