@@ -522,19 +522,20 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     <rect x="${X(-NR / 2)}" y="${Y(W + 1.75)}" width="${(NR * PX).toFixed(1)}" height="${(1.75 * PX).toFixed(1)}" fill="url(#nutFace)"/>
     <rect x="${X(-NR)}" y="${Y(W + 1.75)}" width="${(2 * NR * PX).toFixed(1)}" height="2.2" fill="#fff" fill-opacity=".45"/>
     <rect x="${X(-NR)}" y="${(+Y(W) - 2.2).toFixed(1)}" width="${(2 * NR * PX).toFixed(1)}" height="2.2" fill="#000" fill-opacity=".25"/>
+    <!-- plunger + cap: the part that moves. Drawn before the bushing and flare so that, pressed in,
+         the plunger slides down inside them instead of covering the thread -->
+    <g id="press" class="press">
+      <rect x="${X(-1.1)}" y="${Y(W + 7.6)}" width="${(2.2 * PX).toFixed(1)}" height="${(2.1 * PX).toFixed(1)}" fill="url(#chr)"/>
+      <rect x="${X(-2.05)}" y="${Y(W + 10.45)}" width="${(4.1 * PX).toFixed(1)}" height="${(2.9 * PX).toFixed(1)}" rx="${(.45 * PX).toFixed(1)}" fill="url(#blk)"/>
+      <rect x="${X(-2.05)}" y="${Y(W + 7.95)}" width="${(4.1 * PX).toFixed(1)}" height="${(.4 * PX).toFixed(1)}" fill="url(#capTop)" transform="rotate(180 ${AX} ${Y(W + 7.75)})"/>
+    </g>
     <!-- threaded bushing + top ring -->
     <path d="${thr}" fill="url(#chr)"/>
     ${grooves.map(([a]) => `<line x1="${X(-1.85)}" x2="${X(1.85)}" y1="${Y(a + .02)}" y2="${Y(a + .02)}" stroke="#000" stroke-opacity=".45" stroke-width="2"/>`).join("")}
     <rect x="${X(-1.75)}" y="${Y(W + 3.95)}" width="${(3.5 * PX).toFixed(1)}" height="${(.15 * PX).toFixed(1)}" fill="url(#chr)"/>
     <!-- concave flare -->
     <path d="M${X(-1.7)} ${Y(W + 3.95)} C${X(-1.25)} ${Y(W + 4.4)} ${X(-1.1)} ${Y(W + 5)} ${X(-1.1)} ${Y(W + 5.6)}
-             L${X(1.1)} ${Y(W + 5.6)} C${X(1.1)} ${Y(W + 5)} ${X(1.25)} ${Y(W + 4.4)} ${X(1.7)} ${Y(W + 3.95)} Z" fill="url(#chr)"/>
-    <!-- plunger + cap: the part that moves -->
-    <g id="press" class="press">
-      <rect x="${X(-1.1)}" y="${Y(W + 7.6)}" width="${(2.2 * PX).toFixed(1)}" height="${(2.1 * PX).toFixed(1)}" fill="url(#chr)"/>
-      <rect x="${X(-2.05)}" y="${Y(W + 10.45)}" width="${(4.1 * PX).toFixed(1)}" height="${(2.9 * PX).toFixed(1)}" rx="${(.45 * PX).toFixed(1)}" fill="url(#blk)"/>
-      <rect x="${X(-2.05)}" y="${Y(W + 7.95)}" width="${(4.1 * PX).toFixed(1)}" height="${(.4 * PX).toFixed(1)}" fill="url(#capTop)" transform="rotate(180 ${AX} ${Y(W + 7.75)})"/>
-    </g>`;
+             L${X(1.1)} ${Y(W + 5.6)} C${X(1.1)} ${Y(W + 5)} ${X(1.25)} ${Y(W + 4.4)} ${X(1.7)} ${Y(W + 3.95)} Z" fill="url(#chr)"/>`;
   const press = document.getElementById("press");
   // click the cap: plunger travels in ~1.2 mm and springs back, and "클릭" flashes on the OLED
   const msg = document.getElementById("oled-msg");
