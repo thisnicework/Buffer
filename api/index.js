@@ -112,6 +112,25 @@ const memClaimByNum = new Map();
 const memClaimByClient = new Map();
 const memTakenList = () => [...memClaimByNum.keys()].sort((a, b) => a - b);
 
+// /tx "번호 선택 모드": ON = 관객이 /rx 에서 번호를 직접 고름, OFF = 선착순 자동 배정.
+// Supabase 스키마를 바꾸지 않도록, 켜져 있는 동안 reservations 에 표시용 행 하나(show_id PICK, code PICK-MODE)를 둔다.
+// 예매 집계·관리자 목록은 A~D 회차만 보므로 영향 없음.
+const PICK_ROW = { show_id: "PICK", seat: 0, code: "PICK-MODE", name: "번호선택모드", phone: "pick-mode" };
+let memPickMode = false;
+async function getPickMode() {
+  if (isStateLocal()) return memPickMode;
+  const { data, error } = await supabase.from("reservations").select("id").eq("code", PICK_ROW.code).maybeSingle();
+  return !error && !!data;
+}
+async function setPickMode(on) {
+  if (isStateLocal()) { memPickMode = !!on; return { pickMode: memPickMode }; }
+  const { error } = on
+    ? await supabase.from("reservations").insert({ ...PICK_ROW, created_at: new Date().toISOString() })
+    : await supabase.from("reservations").delete().eq("code", PICK_ROW.code);
+  if (error && error.code !== "23505") return { error: error.message }; // 23505: already on
+  return { pickMode: !!on };
+}
+
 function statePayload(row) {
   const ms = (v) => (v ? new Date(v).getTime() : null);
   return {
@@ -342,10 +361,12 @@ async function handler(req, res) {
 
   if (route === "GET /api/claims") {
     const client = url.searchParams.get("client");
+    const pickMode = await getPickMode();
     if (isStateLocal()) {
       return send(res, 200, {
         taken: memTakenList(),
         mine: validClient(client) ? memClaimByClient.get(client) || null : null,
+        pickMode,
       });
     }
     const { data: rows, error } = await supabase
@@ -358,7 +379,17 @@ async function handler(req, res) {
     const list = rows || [];
     const taken = list.map((r) => r.num);
     const mineRow = validClient(client) ? list.find((r) => r.client_id === client) : null;
-    return send(res, 200, { taken, mine: mineRow ? mineRow.num : null });
+    return send(res, 200, { taken, mine: mineRow ? mineRow.num : null, pickMode });
+  }
+
+  if (route === "GET /api/pickmode") {
+    return send(res, 200, { pickMode: await getPickMode() });
+  }
+  if (route === "POST /api/pickmode") {
+    const b = await getJson(req);
+    const r = await setPickMode(b.on === true);
+    if (r.error) return send(res, 503, { error: "pickmode", message: `번호 선택 모드를 바꾸지 못했습니다: ${r.error}` });
+    return send(res, 200, r);
   }
 
   if (route === "POST /api/claim") {
@@ -479,6 +510,7 @@ async function handler(req, res) {
       const { data: rows, error: allErr } = await supabase
         .from("reservations")
         .select("show_id, seat, code, name, phone, created_at")
+        .in("show_id", ["A", "B", "C", "D"]) // skip the 번호 선택 모드 switch row (show_id PICK)
         .order("show_id", { ascending: true })
         .order("seat", { ascending: true });
 

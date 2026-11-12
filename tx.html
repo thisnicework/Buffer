@@ -112,6 +112,14 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       <button class="next" id="next" type="button">다음 모드</button>
       <p class="err" id="err"></p>
 
+      <section class="seats" aria-label="번호 선택 모드">
+        <div>
+          <h2 class="list-title">관객 번호 배정</h2>
+          <p class="seats-count" id="pick-state">–</p>
+        </div>
+        <button class="btn" id="pick-toggle" type="button" aria-pressed="false">번호 선택 모드</button>
+      </section>
+
       <h2 class="list-title">모드 직접 선택 (리허설·복구용)</h2>
       <ul class="modes" id="modes"></ul>
 
@@ -240,6 +248,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   $("confirm-yes").addEventListener("click", () => {
     const n = pending; pending = null; $("confirm").hidden = true;
     if (n === "reset") resetClaims();
+    else if (n === "pick-on" || n === "pick-off") setPick(n === "pick-on");
     else if (n) setMode(n);
   });
 
@@ -248,8 +257,37 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     try {
       const j = await (await fetch("/api/claims", { cache: "no-store" })).json();
       $("seats-count").textContent = `${j.taken.length} / 40 선택됨`;
+      if (typeof j.pickMode === "boolean") renderPick(j.pickMode);
     } catch (_) {}
   }
+
+  // 번호 선택 모드: ON = 관객이 /rx 오른쪽 위에서 번호를 직접 고름, OFF = 들어온 순서대로 자동 배정
+  let pickMode = null;
+  function renderPick(on) {
+    pickMode = on;
+    $("pick-state").textContent = on ? "직접 선택" : "선착순 자동";
+    $("pick-toggle").textContent = on ? "번호 선택 모드 끄기" : "번호 선택 모드";
+    $("pick-toggle").setAttribute("aria-pressed", String(on));
+    $("pick-toggle").classList.toggle("primary", on);
+  }
+  async function setPick(on) {
+    $("err").textContent = "";
+    try {
+      const r = await fetch("/api/pickmode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || "번호 선택 모드 전환 실패 (" + r.status + ")");
+      renderPick(j.pickMode);
+    } catch (e) { $("err").textContent = e.message; }
+  }
+  $("pick-toggle").addEventListener("click", () => {
+    if (pickMode === null) return;
+    pending = pickMode ? "pick-off" : "pick-on";
+    $("confirm-text").textContent = pickMode
+      ? "번호 선택 모드를 끌까요? 다시 선착순으로 배정돼요."
+      : "번호를 선택할 수 있는 모드로 전환할까요?";
+    $("confirm").hidden = false;
+    $("confirm-yes").focus();
+  });
   async function resetClaims() {
     $("err").textContent = "";
     try {

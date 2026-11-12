@@ -308,6 +308,7 @@ async function dbGetAll() {
       const { data, error } = await supabase
         .from("reservations")
         .select("show_id, seat, code, name, phone, created_at")
+        .in("show_id", ["A", "B", "C", "D"]) // skip the /tx "번호 선택 모드" switch row (show_id PICK)
         .order("show_id", { ascending: true })
         .order("seat", { ascending: true });
       if (!error && Array.isArray(data)) return data;
@@ -501,6 +502,33 @@ async function dbResetClaims() {
   return { taken: [] };
 }
 
+// ---- /tx "번호 선택 모드": ON = 관객이 /rx 에서 번호를 직접 고름, OFF = 선착순 자동 배정 ----
+// Supabase 스키마를 바꾸지 않도록, 켜져 있는 동안 reservations 에 표시용 행 하나(show_id PICK, code PICK-MODE)를 둔다.
+// (예매 집계·관리자 목록은 A~D 회차만 보므로 영향 없음.) SHOW_STATE=local 이면 메모리에만 둔다.
+const PICK_ROW = { show_id: "PICK", seat: 0, code: "PICK-MODE", name: "번호선택모드", phone: "pick-mode" };
+let pickModeLocal = false;
+async function dbGetPickMode() {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase.from("reservations").select("id").eq("code", PICK_ROW.code).maybeSingle();
+      if (!error) return (pickModeLocal = !!data);
+    } catch (_) {}
+  }
+  return pickModeLocal;
+}
+async function dbSetPickMode(on) {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { error } = on
+        ? await supabase.from("reservations").insert({ ...PICK_ROW, created_at: new Date().toISOString() })
+        : await supabase.from("reservations").delete().eq("code", PICK_ROW.code);
+      if (error && error.code !== "23505") return { error: error.message }; // 23505: already on
+    } catch (e) { return { error: e.message }; }
+  }
+  pickModeLocal = !!on;
+  return { pickMode: pickModeLocal };
+}
+
 // open /api/stream connections (Server-Sent Events)
 const streams = new Set();
 function broadcastState(row) {
@@ -508,7 +536,7 @@ function broadcastState(row) {
   for (const res of streams) res.write(msg);
 }
 function broadcastClaims(taken) {
-  const msg = `event: claims\ndata: ${JSON.stringify({ taken })}\n\n`;
+  const msg = `event: claims\ndata: ${JSON.stringify({ taken, pickMode: pickModeLocal })}\n\n`;
   for (const res of streams) res.write(msg);
 }
 
@@ -653,7 +681,7 @@ async function api(req, res, url) {
       "X-Accel-Buffering": "no",
     });
     res.write(`retry: 2000\ndata: ${JSON.stringify(statePayload(curState))}\n\n`);
-    res.write(`event: claims\ndata: ${JSON.stringify({ taken: curClaims.taken })}\n\n`);
+    res.write(`event: claims\ndata: ${JSON.stringify({ taken: curClaims.taken, pickMode: await dbGetPickMode() })}\n\n`);
     streams.add(res);
     req.on("close", () => streams.delete(res));
     return;
@@ -661,7 +689,19 @@ async function api(req, res, url) {
 
   if (route === "GET /api/claims") {
     const client = url.searchParams.get("client");
-    return send(res, 200, await dbGetClaims(client));
+    const [claims, pickMode] = await Promise.all([dbGetClaims(client), dbGetPickMode()]);
+    return send(res, 200, { ...claims, pickMode });
+  }
+
+  if (route === "GET /api/pickmode") {
+    return send(res, 200, { pickMode: await dbGetPickMode() });
+  }
+  if (route === "POST /api/pickmode") {
+    const b = await readJson(req);
+    const r = await dbSetPickMode(b.on === true);
+    if (r.error) return send(res, 503, { error: "pickmode", message: `번호 선택 모드를 바꾸지 못했습니다: ${r.error}` });
+    broadcastClaims((await dbGetClaims(null)).taken);
+    return send(res, 200, r);
   }
 
   if (route === "POST /api/claim") {

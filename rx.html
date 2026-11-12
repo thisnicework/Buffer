@@ -400,14 +400,17 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     }
   }
 
-  // numbers are now handed out first come, first served, so the pill only shows this phone's number
-  if (ADMIN) {
-    trigger.setAttribute("aria-label", "번호 선택");
-    trigger.addEventListener("click", () => (isOpen() ? close() : open()));
-  } else {
-    trigger.setAttribute("aria-haspopup", "false");
-    trigger.setAttribute("aria-label", "내 번호");
-  }
+  // Normally numbers are handed out first come, first served and the pill only shows this phone's number.
+  // The pill opens the wheel in the admin preview, and for everyone while /tx has "번호 선택 모드" on.
+  let pickMode = false;
+  const canPick = () => ADMIN || pickMode;
+  const setPickable = () => {
+    trigger.setAttribute("aria-haspopup", canPick() ? "listbox" : "false");
+    trigger.setAttribute("aria-label", canPick() ? "번호 선택" : "내 번호");
+    if (!canPick() && isOpen()) close();
+  };
+  trigger.addEventListener("click", () => { if (canPick()) (isOpen() ? close() : open()); });
+  setPickable();
   done.addEventListener("click", confirm);
   document.addEventListener("pointerdown", (e) => { if (!root.contains(e.target)) close(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
@@ -424,6 +427,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       if (isOpen()) refreshDone();
     },
     setCommitted(n) { committed = n; if (n) value = n; showLabel(); },
+    setPickMode(on) { if (pickMode !== !!on) { pickMode = !!on; setPickable(); } },
   };
 
   select(1);
@@ -680,11 +684,15 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     }
     return id;
   })();
-  const applyClaims = (taken, mine) => {
+  // pickOn: /tx "번호 선택 모드" (null until the server has told us). While it's on, phones choose their own
+  // number from the pill and nobody is auto-assigned; when it's off, first come, first served as usual.
+  let pickOn = null;
+  const applyClaims = (taken, mine, pick) => {
+    if (typeof pick === "boolean") { pickOn = pick; window.rxPicker.setPickMode(pick); }
     if (window.rxAdmin) { window.rxPicker.setTaken(taken, number); return; } // preview: never claims, keeps the picked number
     if (mine !== undefined && mine !== number) { number = mine; window.rxPicker.setCommitted(mine); paint(); syncAnnouncement(); } // undefined = keep ours
     window.rxPicker.setTaken(taken, number);
-    if (!number && taken.length < 40) autoClaim(); // no number yet (first visit, or /tx reset them all): take the next one
+    if (!number && pickOn === false && taken.length < 40) autoClaim(); // no number yet (first visit, or /tx reset them all): take the next one
   };
 
   // First come, first served: the server hands this phone the lowest free number (1, 2, 3 … 40).
@@ -722,7 +730,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const r = await fetch("/api/claims?client=" + encodeURIComponent(CLIENT), { cache: "no-store" });
       if (!r.ok) return;
       const j = await r.json();
-      applyClaims(j.taken, j.mine);
+      applyClaims(j.taken, j.mine, typeof j.pickMode === "boolean" ? j.pickMode : false); // older server: no switch = first come
     } catch (_) {}
   }
   if (window.rxAdmin) { // preview starts on the last number looked at (01 the first time)
@@ -826,8 +834,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // live list of numbers in use; if ours is gone (/tx reset them all), this phone picks again
     es.addEventListener("claims", (e) => {
       try {
-        const { taken } = JSON.parse(e.data);
-        applyClaims(taken, number && !taken.includes(number) ? null : undefined);
+        const { taken, pickMode } = JSON.parse(e.data);
+        applyClaims(taken, number && !taken.includes(number) ? null : undefined, pickMode);
       } catch (_) {}
     });
   } catch (_) {}
