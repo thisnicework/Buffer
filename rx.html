@@ -884,10 +884,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // 8 numbers each, shuffled once with a fixed seed (never the same note on neighbouring numbers, every
   // block of ten has all five). A number keeps the same note on every phone, and the OLED shows this
   // same note name in modes 7 and 8 (defined in NOTE_OF above, matched 1-to-1 with SHAPE_OF).
-  // Mode 10 uses the same notes as 3 s versions that fade from full to silence (mode10-fade-*.mp3).
+  // Mode 10 uses the same notes as steady 3 s versions (mode10-hold-*.mp3); their loudness follows the shared fade.
   const notePlayers = {};
   const notePlayer = (note, fade) => {
-    const src = fade ? `/assets/rx/mode10-fade-${note}.mp3` : `/assets/rx/mode67-note-${note}.mp3`;
+    const src = fade ? `/assets/rx/mode10-hold-${note}.mp3` : `/assets/rx/mode67-note-${note}.mp3`;
     if (!notePlayers[src]) { notePlayers[src] = new Audio(src); notePlayers[src].preload = "auto"; }
     return notePlayers[src];
   };
@@ -905,10 +905,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     nowNote.play().catch(() => {});
   }
 
-  // ---- fade-out: when /tx moves 9 -> 10, a note still sounding dies away over FADE_S seconds ----
-  // iPhones ignore audio.volume, so the fade runs through a Web Audio gain node (set up on a tap, since the
+  // ---- mode 10 fade-out: one shared fade, FADE_S seconds from the moment /tx switched to 10 (server clock,
+  // so every phone fades together). A note still sounding from mode 9 dies away along it; a press during it
+  // starts at the fade's current level and goes down with it; after it, presses are silent.
+  // iPhones ignore audio.volume, so the level runs through a Web Audio gain node (set up on a tap, since the
   // audio context only starts after one); elsewhere audio.volume is ramped as a fallback.
   const FADE_S = 3;
+  const fadeEnd = () => (state && state.mode === 10 ? state.updatedAtMs + FADE_S * 1000 : 0); // server ms
+  const fadeLevel = () => Math.max(0, Math.min(1, (fadeEnd() - (Date.now() + offset)) / (FADE_S * 1000)));
   let actx = null;
   const wakeAudio = () => {
     try {
@@ -934,22 +938,38 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     try { a.volume = 1; } catch (_) {}
   }
   function stopFade(a) { const f = fading.get(a); if (f) { clearInterval(f); fading.delete(a); } }
-  function fadeOut(a) {
-    if (!sounding(a) || fading.has(a)) return;
-    const g = gainFor(a), t0 = Date.now();
-    if (g) { const t = actx.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0, t + FADE_S); }
-    fading.set(a, setInterval(() => {
-      const k = Math.max(0, 1 - (Date.now() - t0) / (FADE_S * 1000));
+  // follow the shared fade: from the level it has now down to 0 at fadeEnd()
+  function followFade(a) {
+    if (fading.has(a)) return;
+    const g = gainFor(a), k0 = fadeLevel();
+    if (g) {
+      const t = actx.currentTime;
+      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(k0, t); g.gain.linearRampToValueAtTime(0, t + k0 * FADE_S);
+    }
+    const tick = () => {
+      const k = fadeLevel();
       if (!g) try { a.volume = k; } catch (_) {}
       if (k <= 0 || a.paused || a.ended) { stopFade(a); a.pause(); fullVolume(a); }
-    }, 50));
+    };
+    tick();
+    if (!a.paused) fading.set(a, setInterval(tick, 50));
   }
-  let lastMode = null;
+  // a note still sounding when the mode reaches 10 joins the fade
   setInterval(() => {
-    const m = state ? state.mode : 1;
-    if (m === 10 && lastMode !== null && lastMode !== 10 && sounding(nowNote)) fadeOut(nowNote);
-    lastMode = m;
+    if (state && state.mode === 10 && sounding(nowNote) && !fading.has(nowNote)) followFade(nowNote);
   }, 100);
+  // a press in mode 10: this phone's note at the fade's current level, fading with everyone else
+  function playInFade(note) {
+    if (fadeLevel() <= 0) return;                // the fade is over: silence
+    if (sounding(nowNote)) return;               // still sounding (and already fading): one press = one play
+    wakeAudio();
+    const a = notePlayer(note, true);
+    stopFade(a);
+    nowNote = a;
+    try { a.currentTime = 0; } catch (_) {}
+    a.play().catch(() => {});
+    followFade(a);
+  }
 
   // load this phone's note as soon as the show reaches chapter 3, so the first press sounds at once
   setInterval(() => { const m = state ? state.mode : 1; if (m >= 7 && m <= 10 && number) notePlayer(NOTE_OF[number], m === 10); }, 500);  // the cap only sounds in chapter 3 (modes 7~10) and chapter 4 (11, 12); in modes 1~6 the press just animates
@@ -1006,7 +1026,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // mode 6 is "everything off": no panel, no sound on press
     if (mode === 7 && number) { if (mode7Open(number)) play(NOTE_OF[number]); }
     else if ((mode === 8 || mode === 9) && number) play(NOTE_OF[number]); // 9: shape-only panel, same note as 8
-    else if (mode === 10 && number) { wakeAudio(); play(NOTE_OF[number], true); } // same note, fading out over 3 s
+    else if (mode === 10 && number) playInFade(NOTE_OF[number]); // same note, at the shared fade's level
     else if (mode === 11) playMain();
     else if (mode === 12) playDingdong();
   });
