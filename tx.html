@@ -69,6 +69,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .mode:hover{background:var(--soft)}
 .mode .n{grid-row:span 2;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
 .mode .ch{font-size:12px;color:var(--mute)}
+.ch-t{font-weight:700;color:var(--ink)}
+.mode[aria-current="true"] .ch-t{color:var(--paper)}
 .mode .d{font-size:14px;min-width:0}
 .mode[aria-current="true"]{background:var(--ink);color:var(--paper)}
 .mode[aria-current="true"] .ch{color:#B9BDC1}
@@ -164,10 +166,10 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 (() => {
   // DEVICE table: what each mode does on the audience phones
   const MODES = [
-    { n: 1, ch: "챕터 1", d: "미니패널: 각자 개인번호 1~40" },
-    { n: 2, ch: "챕터 1", d: "스피커: 공연 안내 멘트" },
-    { n: 3, ch: "챕터 1", d: "미니패널: 800초 카운트다운 시작" },
-    { n: 4, ch: "챕터 1", d: "카운트다운 유지 · 스피커: 인물들의 파편적인 발화" },
+    { n: 1, ch: "챕터 1", t: "공간파동", d: "미니패널: 각자 개인번호 1~40" },
+    { n: 2, ch: "챕터 1", t: "공간파동", d: "스피커: 공연 안내 멘트" },
+    { n: 3, ch: "챕터 1", t: "공간파동", d: "미니패널: 800초 카운트다운 시작" },
+    { n: 4, ch: "챕터 1", t: "공간파동", d: "카운트다운 유지 · 스피커: 인물들의 파편적인 발화" },
     { n: 5, ch: "챕터 2", d: "미니패널: 개인번호 · 스피커: 파편적인 발화" },
     { n: 6, ch: "챕터 2", d: "전부 꺼짐 · 미니패널 꺼짐 · 버튼 눌러도 소리 없음" },
     { n: 7, ch: "챕터 3", d: "버튼 누르면 소리 · 개인번호 · 음계 단음" },
@@ -178,6 +180,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 12, ch: "챕터 4", d: "미니패널 꺼짐 · 버튼 누르면 띵동" },
   ];
   const $ = (id) => document.getElementById(id);
+  // chapter label, plus the section title in bold where there is one (modes 1~4: 공간파동)
+  const chLabel = (m) => m.ch + (m.t ? ` <b class="ch-t">${m.t}</b>` : "");
   let state = null, offset = 0, pending = null, busy = false;
 
   const setStatus = (ok, text) => {
@@ -203,7 +207,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   const list = $("modes");
   for (const m of MODES) {
     const li = document.createElement("li");
-    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${m.n}</span><span class="ch">${m.ch}</span><span class="d">${m.d}</span></button>`;
+    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${m.n}</span><span class="ch">${chLabel(m)}</span><span class="d">${m.d}</span></button>`;
     list.appendChild(li);
   }
 
@@ -211,7 +215,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     if (!state) return;
     const m = MODES[state.mode - 1];
     $("now-mode").textContent = "MODE " + state.mode;
-    $("now-chapter").textContent = m.ch;
+    $("now-chapter").innerHTML = chLabel(m);
     $("now-desc").textContent = m.d;
     for (const b of list.querySelectorAll(".mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
     const next = MODES[state.mode];
