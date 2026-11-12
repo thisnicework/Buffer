@@ -347,6 +347,7 @@ function statePayload(row) {
     timerStartedAtMs: ms(row.timer_started_at),
     updatedAtMs: ms(row.updated_at),
     timerSeconds: TIMER_SECONDS,
+    step: mode7StepLocal, // 모드 7 단계 (dbGetStep 이 최신값으로 갱신)
     nowMs: Date.now(),
   };
 }
@@ -529,6 +530,35 @@ async function dbSetPickMode(on) {
   return { pickMode: pickModeLocal };
 }
 
+// ---- 모드 7 단계: 무대 모니터 숫자를 따라 소리 낼 번호를 하나씩 연다 ----
+// 0 아무도, 1: 17, 2: +32, 3: +11, 4: +31, 5: +10, 6: 전체. 모드 7로 들어올 때 0으로 돌아감.
+// 번호 선택 모드와 같은 방식으로 reservations 의 표시용 행(show_id STEP, seat = 단계)에 둔다.
+const STEP_ROW = { show_id: "STEP", code: "MODE7-STEP", name: "모드7단계", phone: "mode7-step" };
+let mode7StepLocal = 0;
+async function dbGetStep() {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase.from("reservations").select("seat").eq("code", STEP_ROW.code).maybeSingle();
+      if (!error) return (mode7StepLocal = data ? data.seat : 0);
+    } catch (_) {}
+  }
+  return mode7StepLocal;
+}
+async function dbSetStep(step) {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase.from("reservations").update({ seat: step }).eq("code", STEP_ROW.code).select("id");
+      if (error) return { error: error.message };
+      if (!data || !data.length) {
+        const ins = await supabase.from("reservations").insert({ ...STEP_ROW, seat: step, created_at: new Date().toISOString() });
+        if (ins.error) return { error: ins.error.message };
+      }
+    } catch (e) { return { error: e.message }; }
+  }
+  mode7StepLocal = step;
+  return { step };
+}
+
 // open /api/stream connections (Server-Sent Events)
 const streams = new Set();
 function broadcastState(row) {
@@ -668,12 +698,24 @@ async function api(req, res, url) {
   }
 
   if (route === "GET /api/state") {
-    return send(res, 200, statePayload(await dbGetState()));
+    const [row] = await Promise.all([dbGetState(), dbGetStep()]);
+    return send(res, 200, statePayload(row));
+  }
+
+  if (route === "POST /api/step") {
+    const b = await readJson(req);
+    const step = Number(b.step);
+    if (!Number.isInteger(step) || step < 0 || step > 6) return send(res, 400, { error: "bad_step", message: "단계는 0~6 이어야 합니다." });
+    const r = await dbSetStep(step);
+    if (r.error) return send(res, 503, { error: "step", message: `모드 7 단계를 바꾸지 못했습니다: ${r.error}` });
+    const row = await dbGetState();
+    broadcastState(row);
+    return send(res, 200, statePayload(row));
   }
 
   // live push to /rx: each phone holds this open and gets the new state the moment /tx changes it
   if (route === "GET /api/stream") {
-    const [curState, curClaims] = await Promise.all([dbGetState(), dbGetClaims(null)]);
+    const [curState, curClaims] = await Promise.all([dbGetState(), dbGetClaims(null), dbGetStep()]);
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-store",
@@ -759,6 +801,7 @@ async function api(req, res, url) {
       return send(res, 400, { error: "bad_mode", message: "모드는 1~10 중 하나여야 합니다." });
     }
     const r = await dbSetMode(mode);
+    if (mode === 7 && !r.error) await dbSetStep(0); // entering mode 7: every number starts muted
     if (r.error === "unauthorized") {
       return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });
     }

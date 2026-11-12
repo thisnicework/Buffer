@@ -131,15 +131,37 @@ async function setPickMode(on) {
   return { pickMode: !!on };
 }
 
-function statePayload(row) {
+function statePayload(row, step) {
   const ms = (v) => (v ? new Date(v).getTime() : null);
   return {
     mode: row.mode,
     timerStartedAtMs: ms(row.timer_started_at),
     updatedAtMs: ms(row.updated_at),
     timerSeconds: TIMER_SECONDS,
+    step: typeof step === "number" ? step : 0,
     nowMs: Date.now(),
   };
+}
+
+// 모드 7 단계: 무대 모니터 숫자를 따라 소리 낼 번호를 하나씩 연다.
+// 0 아무도, 1: 17, 2: +32, 3: +11, 4: +31, 5: +10, 6: 전체. 모드 7로 들어올 때 0으로 돌아감.
+// 번호 선택 모드와 같은 방식으로 reservations 의 표시용 행(show_id STEP, seat = 단계)에 둔다.
+const STEP_ROW = { show_id: "STEP", code: "MODE7-STEP", name: "모드7단계", phone: "mode7-step" };
+let memStep = 0;
+async function getStep() {
+  if (isStateLocal()) return memStep;
+  const { data, error } = await supabase.from("reservations").select("seat").eq("code", STEP_ROW.code).maybeSingle();
+  return !error && data ? data.seat : 0;
+}
+async function setStep(step) {
+  if (isStateLocal()) { memStep = step; return { step }; }
+  const { data, error } = await supabase.from("reservations").update({ seat: step }).eq("code", STEP_ROW.code).select("id");
+  if (error) return { error: error.message };
+  if (!data || !data.length) {
+    const ins = await supabase.from("reservations").insert({ ...STEP_ROW, seat: step, created_at: new Date().toISOString() });
+    if (ins.error) return { error: ins.error.message };
+  }
+  return { step };
 }
 
 async function readState(res) {
@@ -316,8 +338,18 @@ async function handler(req, res) {
   }
 
   if (route === "GET /api/state") {
+    const [row, step] = await Promise.all([readState(res), getStep()]);
+    return row && send(res, 200, statePayload(row, step));
+  }
+
+  if (route === "POST /api/step") {
+    const b = await getJson(req);
+    const step = Number(b.step);
+    if (!Number.isInteger(step) || step < 0 || step > 6) return send(res, 400, { error: "bad_step", message: "단계는 0~6 이어야 합니다." });
+    const r = await setStep(step);
+    if (r.error) return send(res, 503, { error: "step", message: `모드 7 단계를 바꾸지 못했습니다: ${r.error}` });
     const row = await readState(res);
-    return row && send(res, 200, statePayload(row));
+    return row && send(res, 200, statePayload(row, step));
   }
 
   if (route === "POST /api/state") {
@@ -333,7 +365,8 @@ async function handler(req, res) {
       else if (mode === 4 && !memState.timer_started_at) memState.timer_started_at = new Date().toISOString();
       memState.mode = mode;
       memState.updated_at = new Date().toISOString();
-      return send(res, 200, statePayload(memState));
+      if (mode === 7) memStep = 0;
+      return send(res, 200, statePayload(memState, memStep));
     }
     let { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
     // Supabase DB가 아직 1~9까지만 허용하는 경우에도 모드 9와 모드 10이 모두 정상 동작하도록 자동 호환 처리:
@@ -356,7 +389,8 @@ async function handler(req, res) {
     if (data && data.error === "unauthorized") return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });
     if (data && data.error === "bad_mode") return send(res, 400, { error: "bad_mode", message: `Supabase가 아직 모드 ${mode}를 받지 않습니다. supabase-schema.sql 의 모드 범위(1~10) 부분을 다시 실행해주세요.` });
     if (data && data.error) return send(res, 400, { error: data.error, message: `모드를 바꾸지 못했습니다 (${data.error}).` });
-    return send(res, 200, statePayload(data));
+    if (mode === 7) await setStep(0); // entering mode 7: every number starts muted
+    return send(res, 200, statePayload(data, mode === 7 ? 0 : await getStep()));
   }
 
   if (route === "GET /api/claims") {

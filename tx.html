@@ -77,6 +77,15 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .seats{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:14px}
 .seats-count{margin:2px 0 0;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
 
+/* mode 7: open the numbers one by one, following the stage monitor */
+.step7{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--ink);border-radius:14px}
+.step7-nums{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.step7-nums li{min-width:52px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;color:var(--mute)}
+.step7-nums li.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.step7-row{display:flex;gap:10px;align-items:stretch}
+.step7-row .next{flex:1;margin:0;white-space:nowrap}
+.step7-row .btn{white-space:nowrap}
+
 /* confirm bar for jumping straight to a mode */
 .confirm{
   position:fixed;left:0;right:0;bottom:0;z-index:10;
@@ -111,6 +120,15 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 
       <button class="next" id="next" type="button">다음 모드</button>
       <p class="err" id="err"></p>
+
+      <section class="step7" id="step7" aria-label="모드 7 소리 열기" hidden>
+        <h2 class="list-title">모드 7 · 소리 낼 번호 (모니터 순서)</h2>
+        <ol class="step7-nums" id="step7-nums"></ol>
+        <div class="step7-row">
+          <button class="btn" id="step7-back" type="button">한 단계 뒤로</button>
+          <button class="next" id="step7-next" type="button">다음 번호 열기</button>
+        </div>
+      </section>
 
       <section class="seats" aria-label="번호 선택 모드">
         <div>
@@ -197,8 +215,36 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const next = MODES[state.mode];
     $("next").disabled = !next || busy;
     $("next").textContent = next ? `다음 모드 → ${next.n}` : "마지막 모드입니다";
+    renderStep7();
     tick();
   }
+
+  // mode 7: 17 → 32 → 11 → 31 → 10 open one at a time (cumulative), then everyone
+  const STEP7 = [17, 32, 11, 31, 10];
+  function renderStep7() {
+    const on = state.mode === 7;
+    $("step7").hidden = !on;
+    if (!on) return;
+    const step = typeof state.step === "number" ? state.step : 0;
+    const labels = [...STEP7.map((n) => String(n).padStart(2, "0")), "전체"];
+    $("step7-nums").innerHTML = labels.map((t, i) => `<li class="${i < step ? "on" : ""}">${t}</li>`).join("");
+    $("step7-next").textContent = step < 5 ? `${String(STEP7[step]).padStart(2, "0")}번 열기` : step === 5 ? "전체 해제" : "모두 소리 나는 중";
+    $("step7-next").disabled = step >= 6 || busy;
+    $("step7-back").disabled = step <= 0 || busy;
+  }
+  async function setStep(step) {
+    busy = true; render();
+    $("err").textContent = "";
+    try {
+      const r = await fetch("/api/step", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || "단계 전환 실패 (" + r.status + ")");
+      state = j;
+    } catch (e) { $("err").textContent = e.message; }
+    finally { busy = false; render(); }
+  }
+  $("step7-next").addEventListener("click", () => { if (state && state.step < 6) setStep((state.step || 0) + 1); });
+  $("step7-back").addEventListener("click", () => { if (state && state.step > 0) setStep(state.step - 1); });
 
   // remaining seconds, computed from the start time on the server's clock
   function tick() {
