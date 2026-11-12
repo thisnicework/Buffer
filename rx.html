@@ -401,9 +401,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   }
 
   // Normally numbers are handed out first come, first served and the pill only shows this phone's number.
-  // The pill opens the wheel in the admin preview, and for everyone while /tx has "번호 선택 모드" on.
+  // The pill opens the wheel only while /tx has "번호 선택 모드" on (admin check option), on every phone
+  // including the admin preview (/rx?admin, /split). First come, first served is the default: pill locked.
   let pickMode = false;
-  const canPick = () => ADMIN || pickMode;
+  const canPick = () => pickMode;
   const setPickable = () => {
     trigger.setAttribute("aria-haspopup", canPick() ? "listbox" : "false");
     trigger.setAttribute("aria-label", canPick() ? "번호 선택" : "내 번호");
