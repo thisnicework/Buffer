@@ -533,13 +533,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 //   1, 5, 6  personal number      2  blank      3, 4  800-second countdown      7  number + its shape
 (() => {
   const oled = document.getElementById("oled-num");
-  // mode 8: each number gets a ○ △ □ ☆, 10 numbers each, shuffled once with a fixed seed so a number
-  // always shows the same shape and neighbouring numbers never share one.
-  const SHAPE_OF = [null,
-    "△","○","☆","□","○","△","☆","△","○","□",
-    "○","□","△","☆","○","☆","○","□","☆","□",
-    "☆","△","□","○","☆","△","○","☆","△","□",
-    "△","□","○","△","☆","□","△","○","☆","□"];
+  // Modes 7 & 8: each number 1~40 gets one of the 5 notes (C, D, Eb, G, Bb), 8 numbers each, shuffled once
+  // with a fixed seed so neighbouring numbers never share a note and every block of 10 has all 5.
+  // Mode 8 matches each of the 5 notes 1-to-1 with one of the 5 shapes (○ △ □ ☆ ✕).
+  const NOTE_OF = [null,
+    "G","Eb","G","C","Eb","C","G","D","Bb","D",
+    "G","C","G","C","Bb","G","D","Bb","Eb","C",
+    "D","Bb","D","Eb","G","C","Eb","Bb","D","Bb",
+    "D","G","Bb","D","Eb","Bb","Eb","C","Eb","C"];
+  const SHAPE_FOR_NOTE = { C: "○", D: "△", Eb: "□", G: "☆", Bb: "✕" };
+  const SHAPE_OF = NOTE_OF.map((n) => (n ? SHAPE_FOR_NOTE[n] : null));
   let number = null, state = null, offset = 0, last = null; // number: this phone's confirmed 1~40 (null until chosen)
 
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
@@ -814,12 +817,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // original 60 ms attack kept, 120 ms release), so a press sounds as one even "삐-----",
   // 8 numbers each, shuffled once with a fixed seed (never the same note on neighbouring numbers, every
   // block of ten has all five). A number keeps the same note on every phone, and the OLED shows this
-  // same note name in modes 7 and 8.
-  const NOTE_OF = [null,
-    "G","Eb","G","C","Eb","C","G","D","Bb","D",
-    "G","C","G","C","Bb","G","D","Bb","Eb","C",
-    "D","Bb","D","Eb","G","C","Eb","Bb","D","Bb",
-    "D","G","Bb","D","Eb","Bb","Eb","C","Eb","C"];
+  // same note name in modes 7 and 8 (defined in NOTE_OF above, matched 1-to-1 with SHAPE_OF).
   const notePlayers = {};
   const notePlayer = (note) => {
     const src = `/assets/rx/mode67-note-${note}.mp3`;
