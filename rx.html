@@ -810,6 +810,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   pull();
 
   // Pressing the cap plays this person's note: the recorded "sos 음정" set C, D, Eb, G, Bb (C.wav … Bb.wav),
+  // each sustained to ring about 2 s (steady part looped on whole pitch periods, then the natural decay),
   // 8 numbers each, shuffled once with a fixed seed (never the same note on neighbouring numbers, every
   // block of ten has all five). A number keeps the same note on every phone, and the OLED shows this
   // same note name in modes 6 and 7.
@@ -825,9 +826,13 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     return notePlayers[src];
   };
   let nowNote = null;
+  // While a sound is still playing, presses are ignored: one press = one full play (no "띵띵띵동").
+  // A leftover sound from an earlier mode or file is stopped so the new one can start.
+  const sounding = (a) => a && !a.paused && !a.ended;
   function play(note) {
-    if (nowNote) nowNote.pause();           // a new press cuts the last note off
-    nowNote = notePlayer(note);
+    const next = notePlayer(note);
+    if (sounding(nowNote)) { if (nowNote === next) return; nowNote.pause(); }
+    nowNote = next;
     try { nowNote.currentTime = 0; } catch (_) {}
     nowNote.play().catch(() => {});
   }
@@ -851,16 +856,18 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   function playMain() {
     const src = mainSrc();
     if (!src) return;
-    if (nowMain) nowMain.pause();
-    nowMain = mainPlayer(src);
+    const next = mainPlayer(src);
+    if (sounding(nowMain)) { if (nowMain === next) return; nowMain.pause(); }
+    nowMain = next;
     try { nowMain.currentTime = 0; } catch (_) {}
     nowMain.play().catch(() => {});
   }
-  // Mode 9: every press plays the 띵동 (띵동 변조 2.wav) from the top, same for everyone.
+  // Mode 9: a press plays the 띵동 (띵동 변조 2.wav), same for everyone; presses during it are ignored.
   const DINGDONG = "/assets/rx/mode9-dingdong.mp3";
   function playDingdong() {
-    if (nowMain) nowMain.pause();
-    nowMain = mainPlayer(DINGDONG);
+    const next = mainPlayer(DINGDONG);
+    if (sounding(nowMain)) { if (nowMain === next) return; nowMain.pause(); }
+    nowMain = next;
     try { nowMain.currentTime = 0; } catch (_) {}
     nowMain.play().catch(() => {});
   }
