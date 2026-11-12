@@ -312,9 +312,11 @@ async function handler(req, res) {
       return send(res, 200, statePayload(memState));
     }
     const { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
-    if (error) return send(res, 503, { error: "no_state", message: "set_show_mode 함수가 없습니다. supabase-schema.sql 을 실행해주세요." });
+    // say why it failed, so /tx shows something more useful than "요청 실패"
+    if (error) return send(res, 503, { error: "no_state", message: `Supabase 모드 저장 실패: ${error.message}. supabase-schema.sql 5~7번을 다시 실행해주세요.` });
     if (data && data.error === "unauthorized") return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });
-    if (data && data.error) return send(res, 400, { error: data.error });
+    if (data && data.error === "bad_mode") return send(res, 400, { error: "bad_mode", message: `Supabase가 아직 모드 ${mode}를 받지 않습니다. supabase-schema.sql 의 모드 범위(1~10) 부분을 다시 실행해주세요.` });
+    if (data && data.error) return send(res, 400, { error: data.error, message: `모드를 바꾸지 못했습니다 (${data.error}).` });
     return send(res, 200, statePayload(data));
   }
 
