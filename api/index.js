@@ -167,7 +167,7 @@ async function setStep(step) {
 // 모드는 1~11. Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고, show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다
 // (5 이상은 타이머를 그대로 두므로 9~11 은 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
-const MODE_MAX = 11;
+const MODE_MAX = 12;
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function getModeRow() {
   const { data, error } = await supabase.from("reservations").select("seat").eq("code", MODE_ROW.code).maybeSingle();
@@ -194,9 +194,9 @@ async function readState(res) {
     return null;
   }
   if (rowMode) return { ...data, mode: rowMode };
-  // 표시용 행이 생기기 전 값: 예전 9(메인사운드)=새 10, 예전 10(띵동, mode 9 + 타이머 없음으로 저장)=새 11
-  if (data.mode === 9) return { ...data, mode: data.timer_started_at ? 10 : 11 };
-  if (data.mode === 10) return { ...data, mode: 11 };
+  // 표시용 행이 생기기 전 값: 예전 9(메인사운드)=새 11, 예전 10(띵동, mode 9 + 타이머 없음으로 저장)=새 12
+  if (data.mode === 9) return { ...data, mode: data.timer_started_at ? 11 : 12 };
+  if (data.mode === 10) return { ...data, mode: 12 };
   return data;
 }
 

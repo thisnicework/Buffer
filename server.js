@@ -368,7 +368,7 @@ function warnClaimsOnce(msg) {
 
 // 모드는 1~11. Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고 show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다.
-const MODE_MAX = 11;
+const MODE_MAX = 12;
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function dbGetModeRow() {
   try {
@@ -396,10 +396,10 @@ async function dbGetState() {
         dbGetModeRow(),
       ]);
       if (!error && data) {
-        // real mode 1~11 lives in the marker row; before it exists: old 9 -> 10, old 10 (9 without timer) -> 11
+        // real mode 1~12 lives in the marker row; before it exists: old 9 -> 11, old 10 (9 without timer) -> 12
         const normalized = rowMode ? { ...data, mode: rowMode }
-          : data.mode === 9 ? { ...data, mode: data.timer_started_at ? 10 : 11 }
-          : data.mode === 10 ? { ...data, mode: 11 } : data;
+          : data.mode === 9 ? { ...data, mode: data.timer_started_at ? 11 : 12 }
+          : data.mode === 10 ? { ...data, mode: 12 } : data;
         sqliteQueries.setState.run(normalized.mode, normalized.timer_started_at || null, normalized.updated_at);
         return normalized;
       }
