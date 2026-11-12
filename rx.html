@@ -1025,11 +1025,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   setInterval(syncMain, 500);
 
   // Mode 7 is opened number by number from /tx, following the numbers on the stage monitor:
-  // step 0 nobody, 1: 17, 2: +32, 3: +11, 4: +31, 5: +10, 6: everyone. Older server (no step): everyone.
+  // each number is switched on / off on its own: bits 0~4 = 17, 32, 11, 31, 10, bit 5 = everyone.
+  // Older server (no open7): everyone.
   const MODE7_ORDER = [17, 32, 11, 31, 10];
   const mode7Open = (n) => {
-    const step = state && typeof state.step === "number" ? state.step : 6;
-    return step >= 6 || MODE7_ORDER.slice(0, step).includes(n);
+    const mask = state && typeof state.open7 === "number" ? state.open7 : 63;
+    if (mask & 32) return true;
+    const i = MODE7_ORDER.indexOf(n);
+    return i >= 0 && !!(mask & (1 << i));
   };
   document.addEventListener("rx-press", () => {
     const mode = state ? state.mode : 1;

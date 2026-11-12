@@ -138,15 +138,16 @@ function statePayload(row, step) {
     timerStartedAtMs: ms(row.timer_started_at),
     updatedAtMs: ms(row.updated_at),
     timerSeconds: TIMER_SECONDS,
-    step: typeof step === "number" ? step : 0,
+    open7: typeof step === "number" ? step : 0, // 모드 7 에서 소리가 열린 번호 (비트 묶음)
     nowMs: Date.now(),
   };
 }
 
 // 모드 7 단계: 무대 모니터 숫자를 따라 소리 낼 번호를 하나씩 연다.
 // 0 아무도, 1: 17, 2: +32, 3: +11, 4: +31, 5: +10, 6: 전체. 모드 7로 들어올 때 0으로 돌아감.
-// 번호 선택 모드와 같은 방식으로 reservations 의 표시용 행(show_id STEP, seat = 단계)에 둔다.
-const STEP_ROW = { show_id: "STEP", code: "MODE7-STEP", name: "모드7단계", phone: "mode7-step" };
+// 이제는 /tx 에서 번호를 눌러 하나씩 켜고 끈다: 비트 0~4 = 17, 32, 11, 31, 10, 비트 5 = 전체 (0~63).
+// 번호 선택 모드와 같은 방식으로 reservations 의 표시용 행(show_id STEP, seat = 비트 묶음)에 둔다.
+const STEP_ROW = { show_id: "STEP", code: "MODE7-OPEN", name: "모드7열림", phone: "mode7-open" };
 let memStep = 0;
 async function getStep() {
   if (isStateLocal()) return memStep;
@@ -364,12 +365,12 @@ async function handler(req, res) {
     return row && send(res, 200, statePayload(row, step));
   }
 
-  if (route === "POST /api/step") {
+  if (route === "POST /api/mode7") {
     const b = await getJson(req);
-    const step = Number(b.step);
-    if (!Number.isInteger(step) || step < 0 || step > 6) return send(res, 400, { error: "bad_step", message: "단계는 0~6 이어야 합니다." });
+    const step = Number(b.mask);
+    if (!Number.isInteger(step) || step < 0 || step > 63) return send(res, 400, { error: "bad_mask", message: "모드 7 번호 값이 올바르지 않습니다." });
     const r = await setStep(step);
-    if (r.error) return send(res, 503, { error: "step", message: `모드 7 단계를 바꾸지 못했습니다: ${r.error}` });
+    if (r.error) return send(res, 503, { error: "mode7", message: `모드 7 번호를 바꾸지 못했습니다: ${r.error}` });
     const row = await readState(res);
     return row && send(res, 200, statePayload(row, step));
   }
