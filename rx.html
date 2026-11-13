@@ -919,7 +919,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const sounding = (a) => a && !a.paused && !a.ended;
   function playSrc(src, restartOnPress = false) {
     const next = notePlayer(src);
-    stopBuf();
+    stopHold7(true);
+    stopHold12(true);
     if (sounding(nowNote)) {
       if (nowNote === next && !restartOnPress) return;
       nowNote.pause();
@@ -928,7 +929,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     try { nowNote.loop = false; nowNote.volume = 1; nowNote.currentTime = 0; } catch (_) {}
     nowNote.play().catch(() => {});
   }
-  // Short note (modes 7~9): plays once per press; once released and pressed again, immediately re-triggers
+  // Short note (modes 8 & 9): plays once per press; once released and pressed again, immediately re-triggers
   const play = (note) => playSrc(`/assets/rx/mode67-note-${note}.mp3`, true);
   // 3-second extended note (mode 10): one press plays the full 3 s extended note
   const playLong = (note) => playSrc(`/assets/rx/mode10-hold-${note}.mp3`, false);
@@ -970,6 +971,59 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
         .catch(() => { delete buffers[src]; return null; });
     }
     return buffers[src];
+  }
+
+  // Mode 7: hold to sustain continuously for opened numbers; stops when released or number closes
+  let holdVoice7 = null; // { node, gain, startedAt, audio }
+  function stopHold7(immediate) {
+    if (!holdVoice7) return;
+    const v = holdVoice7;
+    holdVoice7 = null;
+    if (v.audio) {
+      v.audio.pause();
+      v.audio.loop = false;
+      return;
+    }
+    if (!actx) return;
+    try {
+      const t = actx.currentTime;
+      if (immediate) { v.node.stop(t); return; }
+      v.gain.gain.cancelScheduledValues(t);
+      v.gain.gain.setValueAtTime(1, t);
+      v.gain.gain.linearRampToValueAtTime(0, t + 0.08); // smooth natural 80ms release on release
+      v.node.stop(t + 0.09);
+    } catch (_) {}
+  }
+
+  function startHold7(note) {
+    stopHold7(true);
+    if (sounding(nowNote)) nowNote.pause();
+    wakeAudio();
+    const src = `/assets/rx/mode12-loop-${note}.mp3`;
+    const b = ready[src];
+    if (b && actx && actx.state === "running") {
+      const node = actx.createBufferSource();
+      const gain = actx.createGain();
+      const t = actx.currentTime;
+      node.buffer = b;
+      node.loop = true;
+      node.loopStart = 0;
+      node.loopEnd = b.duration;
+      gain.gain.setValueAtTime(1, t);
+      node.connect(gain).connect(actx.destination);
+      node.start(t, 0);
+      holdVoice7 = { node, gain, startedAt: t };
+      return;
+    }
+    loadBuf(src);
+    const a = notePlayer(src);
+    try {
+      a.volume = 1;
+      a.currentTime = 0;
+      a.loop = true;
+      a.play().catch(() => {});
+    } catch (_) {}
+    holdVoice7 = { audio: a };
   }
 
   // Mode 12: hold to sustain continuously; volume follows the 15s hold -> 10s fadeout curve
@@ -1034,9 +1088,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     holdVoice12 = { audio: a };
   }
 
-  // stop mode 12 voice if leaving mode 12, or adjust HTML5 audio fallback volume
+  // stop mode 7 / 12 voices if leaving mode or closed, or adjust HTML5 audio fallback volume
   setInterval(() => {
     const m = state ? state.mode : 1;
+    if ((m !== 7 || !number || !mode7Open(number)) && holdVoice7) stopHold7(true);
     if (m !== 12 && holdVoice12) stopHold12(true);
     if (m === 12 && holdVoice12 && holdVoice12.audio) {
       const k = fade12Level();
@@ -1050,11 +1105,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const m = state ? state.mode : 1;
     if (m < 7 || m > 12 || !number) return;
     notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`);
+    notePlayer(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
+    loadBuf(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
     if (m >= 9) {
       notePlayer(`/assets/rx/mode10-hold-${NOTE_OF[number]}.mp3`);
       notePlayer(`/assets/rx/mode11-melody-${MELODY_OF[number]}.mp3`);
-      notePlayer(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
-      loadBuf(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
     }
   }, 500); // the cap only sounds in chapter 3 (modes 7~12) and chapter 4 (13, 14); in modes 1~6 the press just animates
 
@@ -1112,8 +1167,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   document.addEventListener("rx-press", () => {
     const mode = state ? state.mode : 1;
     // mode 6 is "everything off": no panel, no sound on press
-    if (mode === 7 && number) { if (mode7Open(number)) play(NOTE_OF[number]); }
-    else if ((mode === 8 || mode === 9) && number) play(NOTE_OF[number]); // 8 & 9: short note (5 groups)
+    // mode 7: handled by rx-down / rx-up (hold to sustain for open numbers)
+    if ((mode === 8 || mode === 9) && number) play(NOTE_OF[number]); // 8 & 9: short note (5 groups)
     else if (mode === 10 && number) playLong(NOTE_OF[number]);            // 10: 2.5-second extended note (5 groups)
     else if (mode === 11 && number) playMelody(MELODY_OF[number]);        // 11: melody 1~4 (4 groups)
     // mode 12: handled by rx-down / rx-up (hold to sustain, 15s hold -> 10s fadeout)
@@ -1122,11 +1177,13 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   });
   document.addEventListener("rx-down", () => {
     const mode = state ? state.mode : 1;
-    if (mode === 12 && number) startHold12(NOTE_OF[number]);
+    if (mode === 7 && number && mode7Open(number)) startHold7(NOTE_OF[number]);
+    else if (mode === 12 && number) startHold12(NOTE_OF[number]);
   });
   document.addEventListener("rx-up", () => {
     const mode = state ? state.mode : 1;
-    if (mode === 12) stopHold12(false);
+    if (mode === 7) stopHold7(false);
+    else if (mode === 12) stopHold12(false);
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });
 })();
