@@ -833,6 +833,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   pullClaims();
   setInterval(paint, 200);
 
+  let raw = null, lastPush = 0; // raw: the server's state as sent (before inner()); lastPush: when Realtime last told us
   async function pull() {
     try {
       const t0 = Date.now();
@@ -840,6 +841,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       if (!r.ok) return;
       const j = await r.json();
       offset = j.nowMs - (t0 + Date.now()) / 2; // phone clock vs server clock
+      if (t0 < lastPush) return; // asked before the latest push arrived: its answer may be older than what we show
+      raw = j;
       state = inner(j);
       paint();
       syncAnnouncement();
@@ -848,10 +851,27 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 
   // Supabase Realtime pushes changes instantly once show_state / show_claims are set up (supabase-schema.sql 5~11).
   // A subscription "succeeds" even before that, so polling always stays on as the safety net.
+  // Once supabase-fast-modes.sql has run, the pushed row itself holds the real mode and open7: the phone switches
+  // on the spot (no round trip to /api/state). An older row (no open7 column) only wakes the phone up to ask.
+  function onPush(payload) {
+    const n = payload && payload.new;
+    if (n && "open7" in n && typeof n.mode === "number" && raw) {
+      lastPush = Date.now();
+      const ms = (v) => (v ? new Date(v).getTime() : null);
+      raw = { ...raw, mode: n.mode, timerStartedAtMs: ms(n.timer_started_at), updatedAtMs: ms(n.updated_at), open7: n.open7 };
+      state = inner(raw);
+      paint();
+      syncAnnouncement();
+      setTimeout(pull, 1500); // check with the server a moment later (it also keeps the clock offset fresh)
+      return;
+    }
+    pull();
+  }
+  if (window.rxAdmin) window.rxPush = onPush; // admin preview: lets a push be replayed by hand when checking timings
   try {
     const sb = window.supabase.createClient("https://qatrsegoqwandtsasunp.supabase.co", "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3", { auth: { persistSession: false } });
     sb.channel("show_live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "show_state" }, pull)
+      .on("postgres_changes", { event: "*", schema: "public", table: "show_state" }, onPush)
       .on("postgres_changes", { event: "*", schema: "public", table: "show_claims" }, pullClaims)
       .subscribe();
   } catch (_) {}
@@ -874,10 +894,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     "B","S","J","J","B","B","J","J","S","B",
     "S","B","J","B","J","S","S","B","S","B"];
   const TRACKS = {
-    2: { src: "/assets/rx/mode2-announcement.mp3", delay: 3000 }, // 공연 안내 멘트 (최승원.wav)
+    // each waits 1 s after the switch so every phone (they hear of it within ~0.3 s) starts from the top together
+    2: { src: "/assets/rx/mode2-announcement.mp3", delay: 1000 }, // 공연 안내 멘트 (최승원.wav)
     // modes 4 and 5: each number hears its own voice; restarts on entering 4 and again on 5; no number chosen yet -> 지민
-    4: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 2000 },
-    5: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 2000 },
+    4: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 1000 },
+    5: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 1000 },
   };
   const srcOf = (t) => (typeof t.src === "function" ? t.src() : t.src);
   const players = {};
@@ -932,7 +953,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   try {
     const es = new EventSource("/api/stream");
     es.onmessage = (e) => {
-      try { state = inner(JSON.parse(e.data)); paint(); syncAnnouncement(); } catch (_) {}
+      try { raw = JSON.parse(e.data); state = inner(raw); paint(); syncAnnouncement(); } catch (_) {}
     };
     // live list of numbers in use; if ours is gone (/tx reset them all), this phone picks again
     es.addEventListener("claims", (e) => {
@@ -943,7 +964,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     });
   } catch (_) {}
 
-  setInterval(pull, 2000);
+  setInterval(pull, 1000); // safety net if a Realtime push is missed
   setInterval(pullClaims, 4000);
   pull();
 

@@ -425,7 +425,11 @@ async function dbSetMode(mode) {
   if (supabase && !STATE_LOCAL) {
     try {
       const rowErr = await dbSetModeRow(mode);
-      let { data, error } = rowErr ? { error: { message: rowErr } } : await supabase.rpc("set_show_mode", { p_mode: Math.max(1, Math.min(mode, 8)), p_secret: SHOW_SECRET }); // 0 (logo) -> 1: no timer
+      // real mode into show_state once supabase-fast-modes.sql has run; an older database takes 1~8 (0 (logo) -> 1)
+      let { data, error } = rowErr ? { error: { message: rowErr } } : await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
+      if (!error && data && data.error === "bad_mode") {
+        ({ data, error } = await supabase.rpc("set_show_mode", { p_mode: Math.max(1, Math.min(mode, 8)), p_secret: SHOW_SECRET }));
+      }
       if (!error && data && !data.error) data = { ...data, mode };
       if (!error && data && !data.error) {
         sqliteQueries.setState.run(data.mode, data.timer_started_at || null, data.updated_at);
@@ -583,6 +587,8 @@ async function dbSetStep(step) {
         const ins = await supabase.from("reservations").insert({ ...STEP_ROW, seat: step, created_at: new Date().toISOString() });
         if (ins.error) return { error: ins.error.message };
       }
+      // also into show_state so phones hear it through Realtime (needs supabase-fast-modes.sql; ignored before)
+      await supabase.rpc("set_show_open7", { p_mask: step, p_secret: SHOW_SECRET }).then(() => {}, () => {});
     } catch (e) { return { error: e.message }; }
   }
   mode7StepLocal = step;

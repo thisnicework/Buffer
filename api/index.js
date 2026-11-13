@@ -374,6 +374,8 @@ async function handler(req, res) {
     if (!Number.isInteger(step) || step < 0 || step > 63) return send(res, 400, { error: "bad_mask", message: "모드 7 번호 값이 올바르지 않습니다." });
     const r = await setStep(step);
     if (r.error) return send(res, 503, { error: "mode7", message: `모드 7 번호를 바꾸지 못했습니다: ${r.error}` });
+    // also into show_state, so the phones hear it through Realtime at once (needs supabase-fast-modes.sql; ignored before)
+    if (!isStateLocal()) await supabase.rpc("set_show_open7", { p_mask: step, p_secret: SHOW_SECRET }).then(() => {}, () => {});
     const row = await readState(res);
     return row && send(res, 200, statePayload(row, step));
   }
@@ -397,7 +399,12 @@ async function handler(req, res) {
     // the real mode number goes in the marker row first, then show_state (1~8, same timer rule) wakes the phones
     const rowErr = await setModeRow(mode);
     if (rowErr) return send(res, 503, { error: "no_state", message: `모드 저장 실패: ${rowErr}` });
-    let { data, error } = await supabase.rpc("set_show_mode", { p_mode: Math.max(1, Math.min(mode, 8)), p_secret: SHOW_SECRET }); // 0 (logo) -> 1: no timer
+    // show_state gets the real mode once supabase-fast-modes.sql has run (the Realtime push then carries it);
+    // an older database only takes 1~8 there, so fall back to that (0 (logo) -> 1: no timer)
+    let { data, error } = await supabase.rpc("set_show_mode", { p_mode: mode, p_secret: SHOW_SECRET });
+    if (!error && data && data.error === "bad_mode") {
+      ({ data, error } = await supabase.rpc("set_show_mode", { p_mode: Math.max(1, Math.min(mode, 8)), p_secret: SHOW_SECRET }));
+    }
     if (data && !data.error) data = { ...data, mode };
     // say why it failed, so /tx shows something more useful than "요청 실패"
     if (error) return send(res, 503, { error: "no_state", message: `Supabase 모드 저장 실패: ${error.message}. supabase-schema.sql 5~7번을 다시 실행해주세요.` });
