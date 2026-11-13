@@ -73,3 +73,9 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.show_state;
   END IF;
 END $$;
+
+-- 5. 사이트가 새 칸(open7)과 새 함수(set_show_open7)를 바로 알아보도록
+NOTIFY pgrst, 'reload schema';
+
+-- 확인용: 아래 결과에 open7 칸이 보이면 성공
+SELECT * FROM public.show_state;
