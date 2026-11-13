@@ -551,8 +551,9 @@ async function dbSetPickMode(on) {
 // ---- 모드 7 단계: 무대 모니터 숫자를 따라 소리 낼 번호를 하나씩 연다 ----
 // 0 아무도, 1: 17, 2: +32, 3: +11, 4: +31, 5: +10, 6: 전체. 모드 7로 들어올 때 0으로 돌아감.
 // 이제는 /tx 에서 번호를 눌러 하나씩 켜고 끈다: 비트 0~4 = 17, 32, 11, 31, 10, 비트 5 = 전체 (0~63).
-// 번호 선택 모드와 같은 방식으로 reservations 의 표시용 행(show_id STEP, seat = 비트 묶음)에 둔다.
-const STEP_ROW = { show_id: "STEP", code: "MODE7-OPEN", name: "모드7열림", phone: "mode7-open" };
+// 번호 선택 모드와 같은 방식으로 reservations 의 표시용 행(show_id OPEN7, seat = 비트 묶음)에 둔다.
+// (show_id 를 예전 단계 행(STEP)과 나눠야 (show_id, seat) 중복 제약에 걸리지 않는다. 예전 행은 쓸 때 지운다.)
+const STEP_ROW = { show_id: "OPEN7", code: "MODE7-OPEN", name: "모드7열림", phone: "mode7-open" };
 let mode7StepLocal = 0;
 async function dbGetStep() {
   if (supabase && !STATE_LOCAL) {
@@ -566,7 +567,8 @@ async function dbGetStep() {
 async function dbSetStep(step) {
   if (supabase && !STATE_LOCAL) {
     try {
-      const { data, error } = await supabase.from("reservations").update({ seat: step }).eq("code", STEP_ROW.code).select("id");
+      await supabase.from("reservations").delete().eq("code", "MODE7-STEP"); // old step row
+      const { data, error } = await supabase.from("reservations").update({ seat: step, show_id: STEP_ROW.show_id }).eq("code", STEP_ROW.code).select("id");
       if (error) return { error: error.message };
       if (!data || !data.length) {
         const ins = await supabase.from("reservations").insert({ ...STEP_ROW, seat: step, created_at: new Date().toISOString() });
