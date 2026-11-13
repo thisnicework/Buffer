@@ -116,8 +116,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 /* gap to the number is set in script from each glyph's measured ink, so ● △ □ sit the same distance below it */
 .oled-shape{font-size:.8em;line-height:1;letter-spacing:0}
 .oled-shape-only{display:inline-block;line-height:1;letter-spacing:0;white-space:nowrap} /* mode 9: size and centring set by fitShape() */
-/* mode 0: the BUFFER 버퍼 wordmark, as wide as the panel */
-.oled-logo{display:block;width:100%;height:auto;filter:drop-shadow(0 0 calc(var(--w) * .006) rgba(235,242,255,.7))}
+/* mode 0: the BUFFER 버퍼 logo with its dots, cropped to its ink (viewBox) and as wide as the panel */
+.oled-logo{display:block;width:100%;height:auto;overflow:visible;filter:drop-shadow(0 0 calc(var(--w) * .006) rgba(235,242,255,.7))}
 .oled-shape.tri{} /* the △ glyph draws much larger than ● and □; shrink it to match */ /* under the number, both centred */
 /* text shown above the case, centred, when the button is clicked */
 @font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}
@@ -600,8 +600,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const INNER_MODE = { 9: 11, 10: 12, 11: 14 };
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
-  // mode 0 logo: just the "BUFFER 버퍼" wordmark, white on transparent, cropped to its letters (1086x193)
-  const LOGO = `<img class="oled-logo" src="/assets/rx/mode0-logo.png" width="1086" height="193" alt="BUFFER 버퍼">`;
+  // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168
+  const LOGO = `<svg class="oled-logo" viewBox="256 337 1371 832" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418"/></svg>`;
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
