@@ -593,6 +593,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const SHAPE_FOR_MELODY = { 1: "○", 2: "△", 3: "□", 4: "☆" };
   const SHAPE11_OF = MELODY_OF.map((m) => (m ? SHAPE_FOR_MELODY[m] : null));
   let number = null, state = null, offset = 0, last = null; // number: this phone's confirmed 1~40 (null until chosen)
+  // /tx now has modes 1~11 (old 9, 10 and 13 were removed). The code below still uses the old 14-mode numbers,
+  // so the server's 9 / 10 / 11 are read as the old 11 (melody) / 12 (hold) / 14 (dingdong).
+  const INNER_MODE = { 9: 11, 10: 12, 11: 14 };
+  const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
   function paint() {
@@ -798,7 +802,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       if (!r.ok) return;
       const j = await r.json();
       offset = j.nowMs - (t0 + Date.now()) / 2; // phone clock vs server clock
-      state = j;
+      state = inner(j);
       paint();
       syncAnnouncement();
     } catch (_) { /* offline or no server: keep the last known state */ }
@@ -890,7 +894,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   try {
     const es = new EventSource("/api/stream");
     es.onmessage = (e) => {
-      try { state = JSON.parse(e.data); paint(); syncAnnouncement(); } catch (_) {}
+      try { state = inner(JSON.parse(e.data)); paint(); syncAnnouncement(); } catch (_) {}
     };
     // live list of numbers in use; if ours is gone (/tx reset them all), this phone picks again
     es.addEventListener("claims", (e) => {

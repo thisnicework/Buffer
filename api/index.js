@@ -168,10 +168,10 @@ async function setStep(step) {
   return { step };
 }
 
-// 모드는 1~14. Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
+// 모드는 1~11. Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고, show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다
-// (5 이상은 타이머를 그대로 두므로 9~14 는 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
-const MODE_MAX = 14;
+// (5 이상은 타이머를 그대로 두므로 9~11 은 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
+const MODE_MAX = 11;
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function getModeRow() {
   const { data, error } = await supabase.from("reservations").select("seat").eq("code", MODE_ROW.code).maybeSingle();
@@ -197,10 +197,9 @@ async function readState(res) {
     send(res, 503, { error: "no_state", message: "show_state 테이블이 없습니다. supabase-schema.sql 을 실행해주세요." });
     return null;
   }
-  if (rowMode) return { ...data, mode: rowMode };
-  // 표시용 행이 생기기 전 값: 예전 9(메인사운드)=새 13, 예전 10(띵동, mode 9 + 타이머 없음으로 저장)=새 14
-  if (data.mode === 9) return { ...data, mode: data.timer_started_at ? 13 : 14 };
-  if (data.mode === 10) return { ...data, mode: 14 };
+  if (rowMode) return { ...data, mode: Math.min(rowMode, MODE_MAX) };
+  // 표시용 행이 생기기 전 값: 예전 9·10(메인사운드/띵동) = 지금의 11(띵동)
+  if (data.mode === 9 || data.mode === 10) return { ...data, mode: MODE_MAX };
   return data;
 }
 
