@@ -20,15 +20,15 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "https://qatrsegoqwandtsasunp.s
 const SUPABASE_KEY = process.env.SUPABASE_KEY || "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
 
-const DEFAULT_SEATS = { A: 26, B: 26, C: 27, D: 31 };
+const DEFAULT_SEATS = { A: 26, B: 26, C: 29, D: 33 };
 const SEATS = (() => {
   const m = { ...DEFAULT_SEATS };
   for (const part of String(process.env.SEATS || "").split(",")) {
     const r = /^\s*([A-D])\s*=\s*(\d{1,2})\s*$/i.exec(part);
     if (r) m[r[1].toUpperCase()] = Number(r[2]);
   }
-  m.C = 27; // 3회차(11.15 일 3PM): 기존 26매 + 추가 1매 = 총 27매 한정 오픈
-  m.D = 31; // 4회차(11.15 일 7PM): 기존 25매 + 추가 6매 = 총 31매 한정 오픈
+  m.C = 29; // 3회차(11.15 일 3PM): 기존 27매 + 추가 2매 = 총 29매 한정 오픈
+  m.D = 33; // 4회차(11.15 일 7PM): 기존 31매 + 추가 2매 = 총 33매 한정 오픈
   return m;
 })();
 
