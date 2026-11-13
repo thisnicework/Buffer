@@ -597,9 +597,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const SHAPE_FOR_MELODY = { 1: "○", 2: "△", 3: "□", 4: "☆" };
   const SHAPE11_OF = MELODY_OF.map((m) => (m ? SHAPE_FOR_MELODY[m] : null));
   let number = null, state = null, offset = 0, last = null; // number: this phone's confirmed 1~40 (null until chosen)
-  // /tx now has modes 1~11 (old 9, 10 and 13 were removed). The code below still uses the old 14-mode numbers,
-  // so the server's 9 / 10 / 11 are read as the old 11 (melody) / 12 (hold) / 14 (dingdong).
-  const INNER_MODE = { 9: 11, 10: 12, 11: 14 };
+  // /tx now has modes 0~11 (old 9, 10 and 13 removed, dingdong moved up to 8). The code below still uses the old
+  // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
+  // 11 (melody) / 12 (hold).
+  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12 };
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.

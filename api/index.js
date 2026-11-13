@@ -199,8 +199,8 @@ async function readState(res) {
     return null;
   }
   if (rowMode != null) return { ...data, mode: Math.min(rowMode, MODE_MAX) };
-  // 표시용 행이 생기기 전 값: 예전 9·10(메인사운드/띵동) = 지금의 11(띵동)
-  if (data.mode === 9 || data.mode === 10) return { ...data, mode: MODE_MAX };
+  // 표시용 행이 생기기 전 값: 예전 9·10(메인사운드/띵동) = 지금의 8(띵동)
+  if (data.mode === 9 || data.mode === 10) return { ...data, mode: 8 };
   return data;
 }
 

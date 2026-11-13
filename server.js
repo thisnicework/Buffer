@@ -406,9 +406,9 @@ async function dbGetState() {
         dbGetModeRow(),
       ]);
       if (!error && data) {
-        // real mode 1~11 lives in the marker row; before it exists: old 9 / 10 (main sound / dingdong) -> 11 (dingdong)
+        // real mode 0~11 lives in the marker row; before it exists: old 9 / 10 (main sound / dingdong) -> 8 (dingdong)
         const normalized = rowMode != null ? { ...data, mode: Math.min(rowMode, MODE_MAX) }
-          : data.mode === 9 || data.mode === 10 ? { ...data, mode: MODE_MAX } : data;
+          : data.mode === 9 || data.mode === 10 ? { ...data, mode: 8 } : data;
         sqliteQueries.setState.run(normalized.mode, normalized.timer_started_at || null, normalized.updated_at);
         return normalized;
       }
