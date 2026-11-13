@@ -366,7 +366,7 @@
     if (!state.loaded) return { label: "불러오는 중", off: true };
     if (mine) return { label: mine.show === s.id ? "예매 완료" : "이미 예매함", off: true };
     if (!isOpen()) return { label: formatOpenLabel(state.openAt), off: true };
-    if (s.soldOut || s.id === "B" || s.id === "C") return { label: "매진", off: true };   // 잔여석 수는 받지도 보여주지도 않음, 매진 여부만
+    if (s.soldOut || s.id === "B") return { label: "매진", off: true };   // 잔여석 수는 받지도 보여주지도 않음, 매진 여부만
     return { label: "예매하기", off: false };
   }
   function render() {
@@ -377,7 +377,7 @@
     var list = state.shows.length ? state.shows : [
       { id: "A", date: "11.14", dow: "SAT", dowKo: "토", time: "3PM" },
       { id: "B", date: "11.14", dow: "SAT", dowKo: "토", time: "7PM", soldOut: true },
-      { id: "C", date: "11.15", dow: "SUN", dowKo: "일", time: "3PM", soldOut: true },
+      { id: "C", date: "11.15", dow: "SUN", dowKo: "일", time: "3PM" },
       { id: "D", date: "11.15", dow: "SUN", dowKo: "일", time: "7PM" }];
     list.forEach(function (s) {
       var row = el("div", "row");
