@@ -1050,8 +1050,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     try { nowNote.loop = false; nowNote.volume = 1; nowNote.currentTime = 0; } catch (_) {}
     nowNote.play().catch(() => {});
   }
-  // Short note (modes 8 & 9): plays once per press; once released and pressed again, immediately re-triggers
-  const play = (note) => playSrc(`/assets/rx/mode67-note-${note}.mp3`, true);
+  // Short note (web mode 9, here 8): one press plays the note once; presses while it still sounds are ignored
+  // (same as the melody in web mode 10), so mashing the button can't re-trigger it
+  const play = (note) => playSrc(`/assets/rx/mode67-note-${note}.mp3`, false);
   // 3-second extended note (mode 10): one press plays the full 3 s extended note
   const playLong = (note) => playSrc(`/assets/rx/mode10-hold-${note}.mp3`, false);
   // Melody 1~4 (mode 11): one press plays the melody
