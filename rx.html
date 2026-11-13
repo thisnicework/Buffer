@@ -185,6 +185,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .ov.ant-b{transform:translateZ(calc(var(--w) * .03))}
 .ov.ant-f{transform:translateZ(calc(var(--w) * .062))}
 .ov.ant-s{transform:translateZ(calc(var(--w) * .004))}
+.ov.leds{transform:translateZ(calc(var(--w) * .005))}
+#leds{opacity:0}
+#leds.on{opacity:1}
 .ov .edge{
   position:absolute;left:calc(10 / 696 * 100%);top:calc(20 / 900 * 100%);
   width:calc(260 / 696 * 100%);height:calc(385 / 900 * 100%);
@@ -270,6 +273,25 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
             <g id="ant-front" fill="none" stroke-linecap="round" stroke-linejoin="round"></g>
           </svg>
         </div>
+        <!-- the two built-in LEDs on the board (white 0603 parts in board.png: top edge by the OLED, and next to Q5);
+             lit only while mode 12 blinks them -->
+        <div class="ov leds">
+          <svg viewBox="0 0 696 900" aria-hidden="true">
+            <defs>
+              <radialGradient id="ledGlow">
+                <stop offset="0" stop-color="#fff" stop-opacity=".95"/>
+                <stop offset=".35" stop-color="#e8f1ff" stop-opacity=".55"/>
+                <stop offset="1" stop-color="#cfe0ff" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <g id="leds">
+              <ellipse cx="445" cy="33" rx="46" ry="34" fill="url(#ledGlow)"/>
+              <rect x="433" y="26" width="24" height="14" rx="2" fill="#fff"/>
+              <ellipse cx="257" cy="718" rx="46" ry="34" fill="url(#ledGlow)"/>
+              <rect x="245" y="711" width="24" height="14" rx="2" fill="#fff"/>
+            </g>
+          </svg>
+        </div>
         <div class="ov btn2"><svg id="btn-svg" viewBox="0 0 696 900" aria-hidden="true"></svg></div>
       </div>
       <div class="box">
@@ -311,11 +333,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const done = document.getElementById("picker-done");
   let value = 1, settle, committed = null, taken = new Set(), busy = false;
 
-  for (let i = 1; i <= MAX; i++) {
+  // the wheel's rows: 01~45, plus 99 in the admin preview (the team's own device, used in mode 13)
+  const VALUES = Array.from({ length: MAX }, (_, i) => i + 1).concat(ADMIN ? [99] : []);
+  window.rxNumberOk = (n) => VALUES.includes(n);
+  const rowOf = (n) => Math.max(0, VALUES.indexOf(n));
+  const atRow = (r) => VALUES[Math.max(0, Math.min(VALUES.length - 1, r))];
+  for (const n of VALUES) {
     const li = document.createElement("li");
-    li.textContent = String(i).padStart(2, "0"); // 01~09 match the two-digit numbers
+    li.textContent = String(n).padStart(2, "0"); // 01~09 match the two-digit numbers
     li.setAttribute("role", "option");
-    li.id = "picker-opt-" + i;
+    li.id = "picker-opt-" + n;
     wheel.appendChild(li);
   }
   const items = [...wheel.children];
@@ -338,27 +365,28 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     done.textContent = msg || (blocked ? "이미 선택된 번호예요" : "완료");
   };
   const select = (v) => {
-    value = Math.max(1, Math.min(MAX, v));
+    value = VALUES.includes(v) ? v : atRow(v - 1);
     showLabel();
-    items.forEach((li, i) => li.setAttribute("aria-selected", String(i + 1 === value)));
+    items.forEach((li, i) => li.setAttribute("aria-selected", String(VALUES[i] === value)));
     wheel.setAttribute("aria-activedescendant", "picker-opt-" + value);
     refreshDone();
   };
-  const scrollTo = (v, smooth) => wheel.scrollTo({ top: (v - 1) * ROW, behavior: smooth ? "smooth" : "auto" });
+  const scrollTo = (v, smooth) => wheel.scrollTo({ top: rowOf(v) * ROW, behavior: smooth ? "smooth" : "auto" });
+  const inBand = () => atRow(Math.round(wheel.scrollTop / ROW)); // the number in the centre band
 
   wheel.addEventListener("scroll", () => {
     requestAnimationFrame(paint);
     clearTimeout(settle);
-    settle = setTimeout(() => select(Math.round(wheel.scrollTop / ROW) + 1), 90);
+    settle = setTimeout(() => select(inBand()), 90);
   }, { passive: true });
   wheel.addEventListener("click", (e) => {
     const li = e.target.closest("li");
-    if (li) scrollTo(items.indexOf(li) + 1, true);
+    if (li) scrollTo(VALUES[items.indexOf(li)], true);
   });
   wheel.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      scrollTo(value + (e.key === "ArrowDown" ? 1 : -1), true);
+      scrollTo(atRow(rowOf(value) + (e.key === "ArrowDown" ? 1 : -1)), true);
     } else if (e.key === "Enter") confirm();
   });
 
@@ -381,7 +409,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   async function confirm() {
     if (!isOpen() || busy) return;
     clearTimeout(settle);
-    select(Math.round(wheel.scrollTop / ROW) + 1); // take the row in the band even if the wheel hasn't settled
+    select(inBand()); // take the row in the band even if the wheel hasn't settled
     if (ADMIN) {
       committed = value;
       try { localStorage.setItem("rx-admin-number", String(value)); } catch (_) {}
@@ -424,7 +452,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     setTaken(list, mine) {
       taken = new Set(list.filter((n) => n !== mine));
       items.forEach((li, i) => {
-        const t = taken.has(i + 1);
+        const t = taken.has(VALUES[i]);
         li.classList.toggle("taken", t);
         li.setAttribute("aria-disabled", String(t));
       });
@@ -597,7 +625,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // /tx now has modes 0~11 (old 9, 10 and 13 removed, dingdong moved up to 8). The code below still uses the old
   // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
   // 11 (melody) / 12 (hold).
-  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12 };
+  // The new 12 (built-in LEDs blink) and 13 (only device 99 dingdongs) are 15 and 16 here.
+  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 15, 13: 16 };
+  const TEAM_DEVICE = 99; // the team's own device: the only one whose button sounds in mode 13
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
@@ -611,7 +641,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const num = number ? String(number).padStart(2, "0") : ""; // 01~09: same two-digit look as 10~40
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
     if (mode === 0) html = LOGO; // before the show: the logo, the same on every phone (no number needed)
-    else if (mode === 2 || mode === 6 || mode === 13 || mode === 14) html = ""; // mode 6 (mute) and chapter 4 (13, 14): panel stays dark
+    else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // also 15 (LEDs blink) and 16 (99 dingdong)
+    else if (number && !NOTE_OF[number] && mode >= 7) html = `<span class="oled-fit" data-ref="00">${num}</span>`; // 99 has no note / shape // mode 6 (mute) and chapter 4 (13, 14): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: shape alone (○ △ □ ☆ ✕) matched to melodies 1~5
     else if ((mode === 3 || mode === 4) && state.timerStartedAtMs) html = `<span class="oled-fit" data-ref="888">${remaining()}</span>`; // sized for the widest 3 digits so it doesn't jump each second
@@ -795,7 +826,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   if (window.rxAdmin) { // preview starts on the last number looked at (01 the first time)
     let n = 1;
     try { n = Number(localStorage.getItem("rx-admin-number")) || 1; } catch (_) {}
-    n = Math.max(1, Math.min(45, n));
+    if (!window.rxNumberOk(n)) n = Math.max(1, Math.min(45, n)); // 1~45, or 99 (the team's device)
     window.rxPicker.setCommitted(n);
     number = n; // the sound setup below isn't defined yet; it picks this number up when the state arrives
   }
@@ -1114,7 +1145,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // preload this phone's chapter 3 audio as soon as the show reaches chapter 3, so the first press sounds at once
   setInterval(() => {
     const m = state ? state.mode : 1;
-    if (m < 7 || m > 12 || !number) return;
+    if (m < 7 || m > 12 || !number || !NOTE_OF[number]) return;
     notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`);
     notePlayer(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
     loadBuf(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
@@ -1160,10 +1191,18 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   function syncMain() {
     const mode = state ? state.mode : 1;
     if (mode === 13) { const src = mainSrc(); if (src) mainPlayer(src); } // start downloading this phone's sound
-    else if (mode === 14) mainPlayer(DINGDONG);
-    if (nowMain && mode !== 13 && mode !== 14) { nowMain.pause(); nowMain = null; } // leaving chapter 4 silences it
+    else if (mode === 14 || (mode === 16 && number === TEAM_DEVICE)) mainPlayer(DINGDONG);
+    if (nowMain && mode !== 13 && mode !== 14 && mode !== 16) { nowMain.pause(); nowMain = null; } // leaving these modes silences it
   }
   setInterval(syncMain, 500);
+
+  // Web mode 12: the board's two built-in LEDs blink, 0.5 s on / 0.5 s off, counted from the moment /tx switched
+  // (server clock), so every phone blinks together.
+  const leds = document.getElementById("leds");
+  setInterval(() => {
+    const on = !!(state && state.mode === 15 && Math.floor((Date.now() + offset - state.updatedAtMs) / 500) % 2 === 0);
+    if (leds.classList.contains("on") !== on) leds.classList.toggle("on", on);
+  }, 50);
 
   // Mode 7 is opened number by number from /tx, following the numbers on the stage monitor:
   // each number is switched on / off on its own: bits 0~4 = 17, 32, 11, 31, 10, bit 5 = everyone.
@@ -1185,6 +1224,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // mode 12: handled by rx-down / rx-up (hold to sustain, 15s hold -> 10s fadeout)
     else if (mode === 13) playMain();
     else if (mode === 14) playDingdong();
+    else if (mode === 16 && number === TEAM_DEVICE) playDingdong(); // web mode 13: only device 99, like mode 7's open numbers
   });
   document.addEventListener("rx-down", () => {
     const mode = state ? state.mode : 1;

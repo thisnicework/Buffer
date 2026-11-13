@@ -169,10 +169,10 @@ async function setStep(step) {
   return { step };
 }
 
-// 모드는 0~11 (0 = 공연 전 BUFFER 로고). Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
+// 모드는 0~13 (0 = 공연 전 BUFFER 로고). Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고, show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다
-// (5 이상은 타이머를 그대로 두므로 9~11 은 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
-const MODE_MAX = 11;
+// (5 이상은 타이머를 그대로 두므로 9~13 은 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
+const MODE_MAX = 13;
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function getModeRow() {
   const { data, error } = await supabase.from("reservations").select("seat").eq("code", MODE_ROW.code).maybeSingle();
