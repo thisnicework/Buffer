@@ -879,35 +879,41 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // mode, timed on the server clock so every phone starts together (polling lag doesn't matter); a phone
   // that arrives late joins mid-track. Switching mode stops the old track; entering a mode starts its track
   // from the top. Browsers only allow sound after a tap, so the first tap anywhere unlocks it.
-  // 파편적인 발화 voices, full length and looping while modes 4/5 last: 지민 = 김지민_1.wav (150.9 s),
-  // 수아 = 김수아.wav (101.7 s), 봄 = 봄 1.wav (134.5 s). In mode 4 each number hears one of the three,
-  // shuffled once with a fixed seed (지민 14, 수아 13, 봄 13) so it looks scattered: never 3 in a row,
-  // no ABAB patterns, every block of ten mixes all three. Mode 5 uses the same assignment.
-  const VOICE = {
-    J: "/assets/rx/mode45-voices.mp3",
-    S: "/assets/rx/mode4-voice-sua.mp3",
-    B: "/assets/rx/mode4-voice-bom.mp3",
-  };
-  const VOICE_OF = [null,
-    "J","J","B","S","J","J","B","J","S","B",
-    "J","J","S","J","B","S","S","B","S","S",
-    "B","S","J","J","B","B","J","J","S","B",
-    "S","B","J","B","J","S","S","B","S","B"];
+  // 파편적인 발화 voices (이어붙이기 1~6.wav and 지민은 혼자 길어서.wav = voice 7), 130~164 s each, looping
+  // until the mode changes (mode 6 fades them out). Each number 1~45 gets one voice in mode 4 and a different one
+  // in mode 5, shuffled once with a fixed seed: every voice 6~7 times per mode, never the same voice within three
+  // neighbouring numbers, and no number hears its mode 4 voice again in mode 5.
+  const VOICE = {};
+  for (let v = 1; v <= 7; v++) VOICE[v] = `/assets/rx/mode45-voice-${v}.mp3`;
+  const VOICE4_OF = [null,
+    1,2,4,3,6,2,3,1,5,7, 3,4,2,7,5,1,6,3,2,4, 1,6,5,7,2,3,5,6,2,1,
+    7,4,3,7,5,1,6,4,7,2, 3,1,6,5,4];
+  const VOICE5_OF = [null,
+    4,7,1,6,2,4,7,5,2,6, 1,5,3,6,1,3,4,7,5,6, 4,7,2,3,5,7,3,4,6,3,
+    1,2,6,4,2,3,7,5,4,1, 2,6,5,1,7];
   const TRACKS = {
     // mode 2 starts the moment /tx switches (a phone that hears of it ~0.1~0.3 s later joins at that point);
     // modes 4 and 5 switch the panel at once but their voices start 2 s after the switch
     2: { src: "/assets/rx/mode2-announcement.mp3", delay: 0 }, // 공연 안내 멘트 (최승원.wav)
-    // modes 4 and 5: each number hears its own voice; restarts on entering 4 and again on 5; no number chosen yet -> 지민
-    4: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 2000 },
-    5: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 2000 },
+    // modes 4 and 5: each number hears its own voice, a new one on entering 5; no number (or 99) -> voice 7 / voice 1
+    4: { src: () => VOICE[VOICE4_OF[number] || 7], delay: 2000 },
+    5: { src: () => VOICE[VOICE5_OF[number] || 1], delay: 2000 },
   };
   const srcOf = (t) => (typeof t.src === "function" ? t.src() : t.src);
   const players = {};
   for (const src of [TRACKS[2].src, ...Object.values(VOICE)]) {
     players[src] = new Audio(src);
-    players[src].preload = "auto";
+    players[src].preload = src === TRACKS[2].src ? "auto" : "none"; // voices: only this phone's two load (below)
   }
   for (const src of Object.values(VOICE)) players[src].loop = true; // 파편적인 발화: repeat until the mode changes
+  // once this phone has its number, start loading its own mode 4 and mode 5 voices (not all seven)
+  setInterval(() => {
+    if (!number) return;
+    for (const m of [4, 5]) {
+      const a = players[srcOf(TRACKS[m])];
+      if (a && a.preload !== "auto" && a.paused) { a.preload = "auto"; try { a.load(); } catch (_) {} }
+    }
+  }, 2000);
   const stopAll = () => Object.values(players).forEach((a) => a.pause());
   let trackKey = null, trackTimer = null;
   function syncAnnouncement() {
@@ -949,7 +955,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // element is (the files are constant bitrate, 48 kHz, 24 ms frames, so time -> byte is exact), on a gain ramp;
   // the element is paused the moment that copy takes over. Where audio.volume works it is also turned down meanwhile.
   const FADE6_S = 3, FRAME_S = 0.024;
-  const FRAME_BYTES = { [TRACKS[2].src]: 384, [VOICE.J]: 288, [VOICE.S]: 288, [VOICE.B]: 288 }; // 128 / 96 kbps
+  const FRAME_BYTES = { [TRACKS[2].src]: 384 }; // 128 kbps announcement
+  for (const src of Object.values(VOICE)) FRAME_BYTES[src] = 288; // 96 kbps voices
   let fades = [];
   function stopFades() {
     for (const f of fades) { f.cancel = true; try { f.node && f.node.stop(); } catch (_) {} clearInterval(f.ramp); }
