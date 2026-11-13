@@ -600,8 +600,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const INNER_MODE = { 9: 11, 10: 12, 11: 14 };
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
-  // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168
-  const LOGO = `<svg class="oled-logo" viewBox="256 337 1371 832" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418"/></svg>`;
+  // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
+  // The "BUFFER 버퍼" letters (x 460..1537, y 617..801, centre 998.5 / 709) sit at the panel's centre: the viewBox is
+  // the smallest box centred on them that still holds every dot.
+  const LOGO = `<svg class="oled-logo" viewBox="256 250 1485 918" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418"/></svg>`;
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
