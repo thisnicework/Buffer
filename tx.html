@@ -160,6 +160,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 (() => {
   // DEVICE table: what each mode does on the audience phones
   const MODES = [
+    { n: 0, ch: "공연 전", d: "미니패널: BUFFER 버퍼 로고 · 버튼 무음" },
     { n: 1, ch: "챕터 1", t: "공간파동", d: "미니패널: 개인번호 1~40 · 버튼 무음" },
     { n: 2, ch: "챕터 1", t: "공간파동", d: "스피커: 안내 멘트 · 버튼 무음" },
     { n: 3, ch: "챕터 1", t: "공간파동", d: "미니패널: 800초 카운트다운 · 버튼 무음" },
@@ -206,12 +207,13 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 
   function render() {
     if (!state) return;
-    const m = MODES[state.mode - 1];
+    const byN = (n) => MODES.find((x) => x.n === n);
+    const m = byN(state.mode) || { ch: "", d: "" };
     $("now-mode").textContent = "MODE " + state.mode;
     $("now-chapter").innerHTML = chLabel(m);
     $("now-desc").textContent = m.d;
     for (const b of list.querySelectorAll(".mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
-    const next = MODES[state.mode];
+    const next = byN(state.mode + 1);
     $("next").disabled = !next || busy;
     $("next").textContent = next ? `다음 모드 → ${next.n}` : "마지막 모드입니다";
     renderStep7();
@@ -283,7 +285,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     }
   }
 
-  $("next").addEventListener("click", () => { if (state && state.mode < MODES.length) setMode(state.mode + 1); });
+  $("next").addEventListener("click", () => { if (state && MODES.some((x) => x.n === state.mode + 1)) setMode(state.mode + 1); });
 
   list.addEventListener("click", (e) => {
     const b = e.target.closest(".mode");
@@ -298,7 +300,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const n = pending; pending = null; $("confirm").hidden = true;
     if (n === "reset") resetClaims();
     else if (n === "pick-on" || n === "pick-off") setPick(n === "pick-on");
-    else if (n) setMode(n);
+    else if (typeof n === "number") setMode(n); // mode 0 (logo) included
   });
 
   // audience numbers: how many of 1~40 are taken, and a reset for the next show

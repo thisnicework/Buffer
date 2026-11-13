@@ -367,7 +367,7 @@ function warnClaimsOnce(msg) {
   console.warn(`⚠️  [Supabase] show_claims 를 쓸 수 없어 로컬 DB로 관객 번호를 저장합니다 (${msg}). supabase-schema.sql 5~11번을 실행하면 사라집니다.`);
 }
 
-// 모드는 1~11. Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
+// 모드는 0~11 (0 = 공연 전 BUFFER 로고). Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고 show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다.
 const MODE_MAX = 11;
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
@@ -398,7 +398,7 @@ async function dbGetState() {
       ]);
       if (!error && data) {
         // real mode 1~11 lives in the marker row; before it exists: old 9 / 10 (main sound / dingdong) -> 11 (dingdong)
-        const normalized = rowMode ? { ...data, mode: Math.min(rowMode, MODE_MAX) }
+        const normalized = rowMode != null ? { ...data, mode: Math.min(rowMode, MODE_MAX) }
           : data.mode === 9 || data.mode === 10 ? { ...data, mode: MODE_MAX } : data;
         sqliteQueries.setState.run(normalized.mode, normalized.timer_started_at || null, normalized.updated_at);
         return normalized;
@@ -416,7 +416,7 @@ async function dbSetMode(mode) {
   if (supabase && !STATE_LOCAL) {
     try {
       const rowErr = await dbSetModeRow(mode);
-      let { data, error } = rowErr ? { error: { message: rowErr } } : await supabase.rpc("set_show_mode", { p_mode: Math.min(mode, 8), p_secret: SHOW_SECRET });
+      let { data, error } = rowErr ? { error: { message: rowErr } } : await supabase.rpc("set_show_mode", { p_mode: Math.max(1, Math.min(mode, 8)), p_secret: SHOW_SECRET }); // 0 (logo) -> 1: no timer
       if (!error && data && !data.error) data = { ...data, mode };
       if (!error && data && !data.error) {
         sqliteQueries.setState.run(data.mode, data.timer_started_at || null, data.updated_at);
@@ -432,7 +432,7 @@ async function dbSetMode(mode) {
   const prev = cur.mode;
   const nowIso = new Date().toISOString();
   let timer = cur.timer_started_at || null;
-  if (mode === 1 || mode === 2) timer = null;
+  if (mode <= 2) timer = null;
   else if (mode === 3 && prev !== 3) timer = nowIso;
   else if (mode === 4 && !timer) timer = nowIso;
   sqliteQueries.setState.run(mode, timer, nowIso);
@@ -818,8 +818,8 @@ async function api(req, res, url) {
   if (route === "POST /api/state") {
     const b = await readJson(req);
     const mode = Number(b.mode);
-    if (!Number.isInteger(mode) || mode < 1 || mode > MODE_MAX) {
-      return send(res, 400, { error: "bad_mode", message: `모드는 1~${MODE_MAX} 중 하나여야 합니다.` });
+    if (!Number.isInteger(mode) || mode < 0 || mode > MODE_MAX) {
+      return send(res, 400, { error: "bad_mode", message: `모드는 0~${MODE_MAX} 중 하나여야 합니다.` });
     }
     const r = await dbSetMode(mode);
     if (mode === 7 && !r.error) await dbSetStep(0); // entering mode 7: every number starts muted

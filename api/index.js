@@ -168,7 +168,7 @@ async function setStep(step) {
   return { step };
 }
 
-// 모드는 1~11. Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
+// 모드는 0~11 (0 = 공연 전 BUFFER 로고). Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고, show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다
 // (5 이상은 타이머를 그대로 두므로 9~11 은 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
 const MODE_MAX = 11;
@@ -197,7 +197,7 @@ async function readState(res) {
     send(res, 503, { error: "no_state", message: "show_state 테이블이 없습니다. supabase-schema.sql 을 실행해주세요." });
     return null;
   }
-  if (rowMode) return { ...data, mode: Math.min(rowMode, MODE_MAX) };
+  if (rowMode != null) return { ...data, mode: Math.min(rowMode, MODE_MAX) };
   // 표시용 행이 생기기 전 값: 예전 9·10(메인사운드/띵동) = 지금의 11(띵동)
   if (data.mode === 9 || data.mode === 10) return { ...data, mode: MODE_MAX };
   return data;
@@ -380,12 +380,12 @@ async function handler(req, res) {
   if (route === "POST /api/state") {
     const b = await getJson(req);
     const mode = Number(b.mode);
-    if (!Number.isInteger(mode) || mode < 1 || mode > MODE_MAX) {
-      return send(res, 400, { error: "bad_mode", message: `모드는 1~${MODE_MAX} 중 하나여야 합니다.` });
+    if (!Number.isInteger(mode) || mode < 0 || mode > MODE_MAX) {
+      return send(res, 400, { error: "bad_mode", message: `모드는 0~${MODE_MAX} 중 하나여야 합니다.` });
     }
     if (isStateLocal()) {
       const prev = memState.mode;
-      if (mode === 1 || mode === 2) memState.timer_started_at = null;
+      if (mode <= 2) memState.timer_started_at = null;
       else if (mode === 3 && prev !== 3) memState.timer_started_at = new Date().toISOString();
       else if (mode === 4 && !memState.timer_started_at) memState.timer_started_at = new Date().toISOString();
       memState.mode = mode;
@@ -396,7 +396,7 @@ async function handler(req, res) {
     // the real mode number goes in the marker row first, then show_state (1~8, same timer rule) wakes the phones
     const rowErr = await setModeRow(mode);
     if (rowErr) return send(res, 503, { error: "no_state", message: `모드 저장 실패: ${rowErr}` });
-    let { data, error } = await supabase.rpc("set_show_mode", { p_mode: Math.min(mode, 8), p_secret: SHOW_SECRET });
+    let { data, error } = await supabase.rpc("set_show_mode", { p_mode: Math.max(1, Math.min(mode, 8)), p_secret: SHOW_SECRET }); // 0 (logo) -> 1: no timer
     if (data && !data.error) data = { ...data, mode };
     // say why it failed, so /tx shows something more useful than "요청 실패"
     if (error) return send(res, 503, { error: "no_state", message: `Supabase 모드 저장 실패: ${error.message}. supabase-schema.sql 5~7번을 다시 실행해주세요.` });
