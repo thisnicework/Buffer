@@ -918,7 +918,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (key === trackKey) return; // same run as before (e.g. 4 -> 5): keep playing
     trackKey = key;
     clearTimeout(trackTimer);
-    stopAll();
+    stopFades();
+    if (state && state.mode === 6) fadeOutTracks(); // 5 -> 6 (MUTE): the voices die away over 3 s instead of cutting off
+    else stopAll();
     if (!t) return;
     const audio = players[src], startAt = from + t.delay;
     const start = () => {
@@ -941,6 +943,61 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     };
     trackTimer = setTimeout(start, Math.max(0, startAt - (Date.now() + offset)));
   }
+  // Mode 6 (MUTE): a track still sounding (the 4/5 voices, or the mode 2 announcement) fades out over 3 s, counted
+  // from the moment /tx switched (server clock), so every phone fades together. iPhones ignore audio.volume, so
+  // the fade plays through Web Audio: the next few seconds of the same MP3, fetched by byte range from where the
+  // element is (the files are constant bitrate, 48 kHz, 24 ms frames, so time -> byte is exact), on a gain ramp;
+  // the element is paused the moment that copy takes over. Where audio.volume works it is also turned down meanwhile.
+  const FADE6_S = 3, FRAME_S = 0.024;
+  const FRAME_BYTES = { [TRACKS[2].src]: 384, [VOICE.J]: 288, [VOICE.S]: 288, [VOICE.B]: 288 }; // 128 / 96 kbps
+  let fades = [];
+  function stopFades() {
+    for (const f of fades) { f.cancel = true; try { f.node && f.node.stop(); } catch (_) {} clearInterval(f.ramp); }
+    fades = [];
+  }
+  function fadeOutTracks() {
+    const end = (state ? state.updatedAtMs : Date.now() + offset) + FADE6_S * 1000; // server ms
+    const left = () => (end - (Date.now() + offset)) / 1000;
+    for (const [src, a] of Object.entries(players)) {
+      if (a.paused || a.ended) continue;
+      if (left() <= 0) { a.pause(); continue; }
+      const f = { cancel: false, node: null, ramp: 0 };
+      fades.push(f);
+      const done = () => { clearInterval(f.ramp); a.pause(); try { a.volume = 1; } catch (_) {} };
+      f.ramp = setInterval(() => {
+        if (f.cancel) return clearInterval(f.ramp);
+        const k = Math.max(0, Math.min(1, left() / FADE6_S));
+        try { a.volume = k; } catch (_) {}
+        if (k <= 0) done();
+      }, 50);
+      fadeCopy(src, a, left, f).then((ok) => { if (ok && !f.cancel) done(); });
+    }
+  }
+  async function fadeCopy(src, a, left, f) {
+    try {
+      wakeAudio();
+      const fb = FRAME_BYTES[src];
+      if (!fb || !actx || actx.state !== "running") return false;
+      const first = Math.max(0, Math.floor(a.currentTime / FRAME_S) - 3); // a few frames early: the decoder needs them to settle
+      const from = first * fb, to = from + Math.ceil((FADE6_S + 2) / FRAME_S) * fb - 1;
+      const r = await fetch(src, { headers: { Range: `bytes=${from}-${to}` } });
+      if (r.status !== 206) return false;
+      const bytes = await r.arrayBuffer();
+      const buf = await new Promise((ok, no) => actx.decodeAudioData(bytes, ok, no));
+      const rest = left(), at = a.currentTime - first * FRAME_S; // where the element is now, inside the fetched piece
+      if (f.cancel || a.paused || rest <= 0 || at < 0 || at >= buf.duration) return false;
+      const node = actx.createBufferSource(), gain = actx.createGain(), t = actx.currentTime;
+      node.buffer = buf;
+      gain.gain.setValueAtTime(Math.min(1, rest / FADE6_S), t);
+      gain.gain.linearRampToValueAtTime(0, t + rest);
+      node.connect(gain).connect(actx.destination);
+      node.start(t, at);
+      node.stop(t + rest + 0.05);
+      f.node = node;
+      return true;
+    } catch (_) { return false; }
+  }
+
   const unlock = () => {
     removeEventListener("pointerdown", unlock);
     Promise.all(Object.values(players).map((a) => {

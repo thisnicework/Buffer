@@ -948,10 +948,20 @@ function serveStatic(req, res, url) {
         const stat = fs.statSync(file);
         if (stat.isFile()) {
           const isAsset = p.startsWith("/assets/") || p.startsWith("/fonts/");
-          res.writeHead(200, {
+          const head = {
             "Content-Type": TYPES[path.extname(file)] || "application/octet-stream",
             "Cache-Control": isAsset ? "public, max-age=3600" : "no-cache",
-          });
+            "Accept-Ranges": "bytes",
+          };
+          // byte ranges (like Vercel): /rx fetches a few seconds of a track from the middle to fade it out
+          const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || "");
+          if (m && +m[1] < stat.size) {
+            const start = +m[1], end = Math.min(stat.size - 1, m[2] ? +m[2] : stat.size - 1);
+            res.writeHead(206, { ...head, "Content-Range": `bytes ${start}-${end}/${stat.size}`, "Content-Length": end - start + 1 });
+            fs.createReadStream(file, { start, end }).pipe(res);
+            return;
+          }
+          res.writeHead(200, head);
           fs.createReadStream(file).pipe(res);
           return;
         }
