@@ -90,7 +90,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.book_ticket(TEXT, TEXT, TEXT, INTEGER) TO anon, authenticated;
 
 -- ==============================================================================
--- DEVICE 공연 제어 & 관객 개인번호 1~40 (/tx 운영 콘솔 · /rx 관객 휴대폰)
+-- DEVICE 공연 제어 & 관객 개인번호 1~45 (/tx 운영 콘솔 · /rx 관객 휴대폰)
 -- ==============================================================================
 
 -- 5. 현재 공연 상태 (행 하나만 존재)
@@ -162,9 +162,9 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.set_show_mode(INTEGER, TEXT) TO anon, authenticated;
 
--- 8. 관객 개인번호 점유 테이블 (1~40번, 휴대폰당 1개 번호)
+-- 8. 관객 개인번호 점유 테이블 (1~45번, 휴대폰당 1개 번호)
 CREATE TABLE IF NOT EXISTS public.show_claims (
-  num INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 40),
+  num INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 45),
   client_id TEXT NOT NULL UNIQUE,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -193,7 +193,7 @@ BEGIN
   IF p_client IS NULL OR p_client !~ '^[A-Za-z0-9-]{8,64}$' THEN
     RETURN jsonb_build_object('error', 'client');
   END IF;
-  IF p_number IS NULL OR p_number < 1 OR p_number > 40 THEN
+  IF p_number IS NULL OR p_number < 1 OR p_number > 45 THEN
     RETURN jsonb_build_object('error', 'number');
   END IF;
 

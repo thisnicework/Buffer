@@ -101,7 +101,8 @@ async function getJson(req) {
 
 const csvCell = (v) => `"${String(v).replace(/"/g, '""')}"`;
 
-// DEVICE 공연 상태 & 관객 개인번호 (1~40): Supabase show_state / show_claims (supabase-schema.sql 5~11번)
+// DEVICE 공연 상태 & 관객 개인번호 (1~45): Supabase show_state / show_claims (supabase-schema.sql 5~11번)
+const NUM_MAX = 45; // 관객 개인번호 최대값 (Supabase show_claims 의 CHECK 와 claim_show_number 도 같은 값)
 const TIMER_SECONDS = 800;
 const SHOW_SECRET = ADMIN_TOKEN || "admin1234";
 const validClient = (v) => typeof v === "string" && /^[A-Za-z0-9-]{8,64}$/.test(v);
@@ -444,8 +445,8 @@ async function handler(req, res) {
     const b = await getJson(req);
     const number = Number(b.number);
     if (!validClient(b.client)) return send(res, 400, { error: "client" });
-    if (!Number.isInteger(number) || number < 1 || number > 40) {
-      return send(res, 400, { error: "number", message: "번호는 1~40 중 하나여야 합니다." });
+    if (!Number.isInteger(number) || number < 1 || number > NUM_MAX) {
+      return send(res, 400, { error: "number", message: `번호는 1~${NUM_MAX} 중 하나여야 합니다.` });
     }
     if (isStateLocal()) {
       const owner = memClaimByNum.get(number);
@@ -474,7 +475,7 @@ async function handler(req, res) {
     return send(res, 200, { number: data.number, taken: data.taken || [] });
   }
 
-  // first come, first served: a phone that arrives gets the lowest free number (1, 2, 3 … 40).
+  // first come, first served: a phone that arrives gets the lowest free number (1, 2, 3 … 45).
   // The same phone (same client id) always gets its number back.
   if (route === "POST /api/claim/auto") {
     const b = await getJson(req);
@@ -482,13 +483,13 @@ async function handler(req, res) {
     if (isStateLocal()) {
       const existing = memClaimByClient.get(b.client);
       if (existing) return send(res, 200, { number: existing, taken: memTakenList() });
-      for (let n = 1; n <= 40; n++) {
+      for (let n = 1; n <= NUM_MAX; n++) {
         if (memClaimByNum.has(n)) continue;
         memClaimByNum.set(n, b.client);
         memClaimByClient.set(b.client, n);
         return send(res, 200, { number: n, taken: memTakenList() });
       }
-      return send(res, 409, { error: "full", message: "40명이 모두 들어왔어요.", taken: memTakenList() });
+      return send(res, 409, { error: "full", message: `${NUM_MAX}명이 모두 들어왔어요.`, taken: memTakenList() });
     }
     let { data: rows, error: listErr } = await supabase
       .from("show_claims")
@@ -503,7 +504,7 @@ async function handler(req, res) {
       return send(res, 200, { number: mineRow.num, taken: list.map((r) => r.num) });
     }
     let taken = list.map((r) => r.num);
-    for (let n = 1; n <= 40; n++) {
+    for (let n = 1; n <= NUM_MAX; n++) {
       if (taken.includes(n)) continue;
       const { data, error } = await supabase.rpc("claim_show_number", {
         p_client: b.client,
@@ -525,7 +526,7 @@ async function handler(req, res) {
       taken = list.map((r) => r.num);
       n = 0;
     }
-    return send(res, 409, { error: "full", message: "40명이 모두 들어왔어요.", taken });
+    return send(res, 409, { error: "full", message: `${NUM_MAX}명이 모두 들어왔어요.`, taken });
   }
 
   if (route === "POST /api/claims/reset") {

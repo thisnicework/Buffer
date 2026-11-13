@@ -307,7 +307,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   async function refreshClaims() {
     try {
       const j = await (await fetch("/api/claims", { cache: "no-store" })).json();
-      $("seats-count").textContent = `${j.taken.length} / 40 선택됨`;
+      $("seats-count").textContent = `${j.taken.length} / 45 선택됨`;
       if (typeof j.pickMode === "boolean") renderPick(j.pickMode);
     } catch (_) {}
   }

@@ -299,7 +299,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 // number picker: tap the trigger, a wheel drops down; scroll (snaps to rows) or tap a row to choose.
 // Numbers are one-per-phone: ones other people hold are greyed out live and can't be confirmed.
 (() => {
-  const ROW = 36, MAX = 40;
+  const ROW = 36, MAX = 45;
   // /rx?admin: operator preview. The pill opens the wheel and any 01~40 can be picked to see/hear what
   // that number gets. Nothing is claimed on the server, so it never takes a seat from the audience.
   const ADMIN = new URLSearchParams(location.search).has("admin");
@@ -583,7 +583,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     "G","Eb","G","C","Eb","C","G","D","Bb","D",
     "G","C","G","C","Bb","G","D","Bb","Eb","C",
     "D","Bb","D","Eb","G","C","Eb","Bb","D","Bb",
-    "D","G","Bb","D","Eb","Bb","Eb","C","Eb","C"];
+    "D","G","Bb","D","Eb","Bb","Eb","C","Eb","C",
+    "D","G","Eb","Bb","C"]; // 41~45: one of each note, none next to the same note
   const SHAPE_FOR_NOTE = { C: "○", D: "△", Eb: "□", G: "☆", Bb: "✕" };
   const SHAPE_OF = NOTE_OF.map((n) => (n ? SHAPE_FOR_NOTE[n] : null));
   // Mode 11: 4 melody groups (1~4, 10 numbers each, no adjacent duplicates) matched 1-to-1 with 4 shapes (○ △ □ ☆).
@@ -591,7 +592,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     4,3,4,1,3,1,4,2,1,2,
     4,1,4,1,2,4,2,4,3,1,
     2,3,2,3,4,1,3,1,2,4,
-    2,4,3,2,3,2,3,1,3,1];
+    2,4,3,2,3,2,3,1,3,1,
+    2,4,1,3,2]; // 41~45: no adjacent duplicates
   const SHAPE_FOR_MELODY = { 1: "○", 2: "△", 3: "□", 4: "☆" };
   const SHAPE11_OF = MELODY_OF.map((m) => (m ? SHAPE_FOR_MELODY[m] : null));
   let number = null, state = null, offset = 0, last = null; // number: this phone's confirmed 1~40 (null until chosen)
@@ -751,7 +753,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (window.rxAdmin) { window.rxPicker.setTaken(taken, number); return; } // preview: never claims, keeps the picked number
     if (mine !== undefined && mine !== number) { number = mine; window.rxPicker.setCommitted(mine); paint(); syncAnnouncement(); } // undefined = keep ours
     window.rxPicker.setTaken(taken, number);
-    if (!number && pickOn === false && taken.length < 40) autoClaim(); // no number yet (first visit, or /tx reset them all): take the next one
+    if (!number && pickOn === false && taken.length < 45) autoClaim(); // no number yet (first visit, or /tx reset them all): take the next one
   };
 
   // First come, first served: the server hands this phone the lowest free number (1, 2, 3 … 40).
@@ -795,7 +797,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   if (window.rxAdmin) { // preview starts on the last number looked at (01 the first time)
     let n = 1;
     try { n = Number(localStorage.getItem("rx-admin-number")) || 1; } catch (_) {}
-    n = Math.max(1, Math.min(40, n));
+    n = Math.max(1, Math.min(45, n));
     window.rxPicker.setCommitted(n);
     number = n; // the sound setup below isn't defined yet; it picks this number up when the state arrives
   }

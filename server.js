@@ -91,11 +91,19 @@ sqliteDb.exec(`
     updated_at       TEXT    NOT NULL
   );
   CREATE TABLE IF NOT EXISTS show_claims (
-    num        INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 40),
+    num        INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 45),
     client_id  TEXT    NOT NULL UNIQUE,
     updated_at TEXT    NOT NULL
   );
 `);
+// audience numbers went from 1~40 to 1~45: rebuild an older local table so 41~45 pass its CHECK (claims are per show anyway)
+{
+  const t = sqliteDb.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'show_claims'").get();
+  if (t && /BETWEEN 1 AND 40\b/.test(t.sql)) {
+    sqliteDb.exec(`DROP TABLE show_claims;
+      CREATE TABLE show_claims (num INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 45), client_id TEXT NOT NULL UNIQUE, updated_at TEXT NOT NULL);`);
+  }
+}
 sqliteDb.prepare("INSERT OR IGNORE INTO show_state (id, mode, timer_started_at, updated_at) VALUES (1, 1, NULL, ?)").run(new Date().toISOString());
 
 const sqliteQueries = {
@@ -334,7 +342,8 @@ async function dbAdminDelete(code) {
   return true;
 }
 
-// ---- DEVICE 공연 상태 & 관객 개인번호 1~40 (/tx 가 바꾸고 /rx 가 따라감) ----
+// ---- DEVICE 공연 상태 & 관객 개인번호 1~45 (/tx 가 바꾸고 /rx 가 따라감) ----
+const NUM_MAX = 45; // 관객 개인번호 최대값 (Supabase show_claims 의 CHECK 와 claim_show_number 도 같은 값: supabase-schema.sql)
 // Supabase show_state / show_claims 가 원본. 테이블이 아직 없거나 SHOW_STATE=local 이면 로컬 SQLite 로 폴백 동작
 const TIMER_SECONDS = 800;
 const SHOW_SECRET = ADMIN_TOKEN || "admin1234";
@@ -771,8 +780,8 @@ async function api(req, res, url) {
     const b = await readJson(req);
     const number = Number(b.number);
     if (!validClient(b.client)) return send(res, 400, { error: "client" });
-    if (!Number.isInteger(number) || number < 1 || number > 40) {
-      return send(res, 400, { error: "number", message: "번호는 1~40 중 하나여야 합니다." });
+    if (!Number.isInteger(number) || number < 1 || number > NUM_MAX) {
+      return send(res, 400, { error: "number", message: `번호는 1~${NUM_MAX} 중 하나여야 합니다.` });
     }
     const r = await dbClaimNumber(b.client, number);
     if (r.error === "taken") {
@@ -783,14 +792,14 @@ async function api(req, res, url) {
     return send(res, 200, { number: r.number, taken: r.taken });
   }
 
-  // first come, first served: a phone that arrives gets the lowest free number (1, 2, 3 … 40).
+  // first come, first served: a phone that arrives gets the lowest free number (1, 2, 3 … 45).
   // The same phone (same client id) always gets its number back.
   if (route === "POST /api/claim/auto") {
     const b = await readJson(req);
     if (!validClient(b.client)) return send(res, 400, { error: "client" });
     let snap = await dbGetClaims(b.client);
     if (snap.mine) return send(res, 200, { number: snap.mine, taken: snap.taken });
-    for (let n = 1; n <= 40; n++) {
+    for (let n = 1; n <= NUM_MAX; n++) {
       if (snap.taken.includes(n)) continue;
       const r = await dbClaimNumber(b.client, n);
       if (!r.error) {
@@ -801,7 +810,7 @@ async function api(req, res, url) {
       snap = await dbGetClaims(b.client); // someone took it a moment earlier: look again
       n = 0;
     }
-    return send(res, 409, { error: "full", message: "40명이 모두 들어왔어요.", taken: snap.taken });
+    return send(res, 409, { error: "full", message: `${NUM_MAX}명이 모두 들어왔어요.`, taken: snap.taken });
   }
 
   if (route === "POST /api/claims/reset") {
