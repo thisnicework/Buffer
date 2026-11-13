@@ -600,16 +600,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // single-line modes fill the panel edge to edge (see fitText); no number yet: the panel stays dark
     const num = number ? String(number).padStart(2, "0") : ""; // 01~09: same two-digit look as 10~40
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
-    if (mode === 2 || mode === 6 || mode === 12 || mode === 13 || mode === 14) html = ""; // mode 6 (mute), 12 (fade-out) and chapter 4 (13, 14): panel stays dark
+    if (mode === 2 || mode === 6 || mode === 13 || mode === 14 || mode === 15) html = ""; // mode 6 (mute), 13 (fade-out) and chapter 4 (14, 15): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: 4-group shape alone (○ △ □ ☆) matched to melodies 1~4
     else if ((mode === 3 || mode === 4) && state.timerStartedAtMs) html = `<span class="oled-fit" data-ref="888">${remaining()}</span>`; // sized for the widest 3 digits so it doesn't jump each second
-    else if ((mode === 7 || mode === 8) && number) {
-      // chapter 3, stacked and centred: number / shape (mode 8 only) / note name
-      const shape = mode === 8 ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
+    else if ((mode === 7 || mode === 8 || mode === 12) && number) {
+      // chapter 3, stacked and centred: number / shape (mode 8 and 12 only) / note name
+      const shape = (mode === 8 || mode === 12) ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
       html = `<span class="oled-line"><span class="oled-n">${num}</span>${shape}<span class="oled-note">${NOTE_OF[number]}</span></span>`;
     }
-    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); fitShape(); if (mode === 7 || mode === 8) fitStack(); }
+    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); fitShape(); if (mode === 7 || mode === 8 || mode === 12) fitStack(); }
   }
 
   // Mode 9: the shape alone, its ink scaled to SHAPE_FILL of the panel and centred by the ink itself
@@ -935,10 +935,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // Melody 1~4 (mode 11): one press plays the melody
   const playMelody = (mel) => playSrc(`/assets/rx/mode11-melody-${mel}.mp3`, false);
 
-  // ---- mode 12 fade-out (Web Audio) ----
+  // ---- mode 13 fade-out (Web Audio) ----
   const HOLD_S = 1, FADE_S = 3;
-  const fadeStart = () => (state && state.mode === 12 ? state.updatedAtMs + HOLD_S * 1000 : 0); // server ms
-  const fadeEnd = () => (state && state.mode === 12 ? fadeStart() + FADE_S * 1000 : 0);
+  const fadeStart = () => (state && state.mode === 13 ? state.updatedAtMs + HOLD_S * 1000 : 0); // server ms
+  const fadeEnd = () => (state && state.mode === 13 ? fadeStart() + FADE_S * 1000 : 0);
   const fadeLevel = () => Math.max(0, Math.min(1, (fadeEnd() - (Date.now() + offset)) / (FADE_S * 1000)));
   let actx = null;
   const wakeAudio = () => {
@@ -984,28 +984,28 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     buf = { node, endAt: Math.min(end, t + b.duration - at) };
     return true;
   }
-  // a note/melody still sounding when the mode reaches 12 is handed over to its fading copy
+  // a note/melody still sounding when the mode reaches 13 is handed over to its fading copy
   setInterval(() => {
     const m = state ? state.mode : 1;
-    if (m !== 12 || !sounding(nowNote)) return;
+    if (m !== 13 || !sounding(nowNote)) return;
     if (fadeBuf(new URL(nowNote.src).pathname, nowNote.currentTime, 1)) { nowNote.pause(); return; }
     // no Web Audio yet on this phone: turn the <audio> itself down where the browser allows it
     const k = fadeLevel();
     try { nowNote.volume = k; } catch (_) {}
     if (k <= 0) nowNote.pause();
   }, 100);
-  // a press in mode 12: this phone's melody at the fade's current level, fading with everyone else
-  function playInFade(mel) {
+  // a press in mode 13: this phone's note at the fade's current level, fading with everyone else
+  function playInFade(note) {
     if (fadeLevel() <= 0 || bufSounding() || sounding(nowNote)) return; // over, or one already sounding
     wakeAudio();
-    const src = `/assets/rx/mode11-melody-${mel}.mp3`;
+    const src = `/assets/rx/mode10-hold-${note}.mp3`;
     if (!fadeBuf(src, 0)) loadBuf(src);
   }
 
   // preload this phone's chapter 3 audio as soon as the show reaches chapter 3, so the first press sounds at once
   setInterval(() => {
     const m = state ? state.mode : 1;
-    if (m < 7 || m > 12 || !number) return;
+    if (m < 7 || m > 13 || !number) return;
     notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`);
     if (m >= 9) {
       notePlayer(`/assets/rx/mode10-hold-${NOTE_OF[number]}.mp3`);
@@ -1013,10 +1013,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       notePlayer(`/assets/rx/mode11-melody-${MELODY_OF[number]}.mp3`);
       loadBuf(`/assets/rx/mode11-melody-${MELODY_OF[number]}.mp3`);
     }
-  }, 500); // the cap only sounds in chapter 3 (modes 7~12) and chapter 4 (13, 14); in modes 1~6 the press just animates
-  // Chapter 4, mode 13: each number owns one of the 9 main sounds (지원 지민 승환 승영 세령 선율 봄 민 수아),
+  }, 500); // the cap only sounds in chapter 3 (modes 7~13) and chapter 4 (14, 15); in modes 1~6 the press just animates
+  // Chapter 4, mode 14: each number owns one of the 9 main sounds (지원 지민 승환 승영 세령 선율 봄 민 수아),
   // shuffled once with a fixed seed: 4–5 numbers per sound, never the same sound on neighbouring numbers.
-  // Every press plays this phone's sound from the top. Only that one file loads, once the show reaches mode 13.
+  // Every press plays this phone's sound from the top. Only that one file loads, once the show reaches mode 14.
   const MAIN_OF = [null,
     "seunghwan","jiwon","min","seryeong","bom","sua","seonyul","jiwon","seonyul","jimin",
     "seryeong","jimin","seungyoung","min","seungyoung","bom","sua","jiwon","sua","seunghwan",
@@ -1038,7 +1038,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     try { nowMain.currentTime = 0; } catch (_) {}
     nowMain.play().catch(() => {});
   }
-  // Mode 14: a press plays the 띵동 (띵동 변조 2.wav), same for everyone; presses during it are ignored.
+  // Mode 15: a press plays the 띵동 (띵동 변조 2.wav), same for everyone; presses during it are ignored.
   const DINGDONG = "/assets/rx/mode9-dingdong.mp3";
   function playDingdong() {
     const next = mainPlayer(DINGDONG);
@@ -1049,9 +1049,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   }
   function syncMain() {
     const mode = state ? state.mode : 1;
-    if (mode === 13) { const src = mainSrc(); if (src) mainPlayer(src); } // start downloading this phone's sound
-    else if (mode === 14) mainPlayer(DINGDONG);
-    if (nowMain && mode !== 13 && mode !== 14) { nowMain.pause(); nowMain = null; } // leaving chapter 4 silences it
+    if (mode === 14) { const src = mainSrc(); if (src) mainPlayer(src); } // start downloading this phone's sound
+    else if (mode === 15) mainPlayer(DINGDONG);
+    if (nowMain && mode !== 14 && mode !== 15) { nowMain.pause(); nowMain = null; } // leaving chapter 4 silences it
   }
   setInterval(syncMain, 500);
 
@@ -1069,12 +1069,12 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const mode = state ? state.mode : 1;
     // mode 6 is "everything off": no panel, no sound on press
     if (mode === 7 && number) { if (mode7Open(number)) play(NOTE_OF[number]); }
-    else if ((mode === 8 || mode === 9) && number) play(NOTE_OF[number]); // 8 & 9: short note once per press-release (5 groups)
-    else if (mode === 10 && number) playLong(NOTE_OF[number]);            // 10: 3-second extended note on single press (5 groups)
-    else if (mode === 11 && number) playMelody(MELODY_OF[number]);        // 11: shape-only panel, melody 1~4 (4 groups)
-    else if (mode === 12 && number) playInFade(MELODY_OF[number]);        // 12: fade-out
-    else if (mode === 13) playMain();
-    else if (mode === 14) playDingdong();
+    else if ((mode === 8 || mode === 9 || mode === 12) && number) play(NOTE_OF[number]); // 8, 9, 12: short note (5 groups)
+    else if (mode === 10 && number) playLong(NOTE_OF[number]);            // 10: 2.5-second extended note (5 groups)
+    else if (mode === 11 && number) playMelody(MELODY_OF[number]);        // 11: melody 1~4 (4 groups)
+    else if (mode === 13 && number) playInFade(NOTE_OF[number]);          // 13: fade-out
+    else if (mode === 14) playMain();                                     // 14: main sounds
+    else if (mode === 15) playDingdong();                                 // 15: dingdong
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });
 })();
