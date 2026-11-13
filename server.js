@@ -366,9 +366,9 @@ function warnClaimsOnce(msg) {
   console.warn(`⚠️  [Supabase] show_claims 를 쓸 수 없어 로컬 DB로 관객 번호를 저장합니다 (${msg}). supabase-schema.sql 5~11번을 실행하면 사라집니다.`);
 }
 
-// 모드는 1~15. Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
+// 모드는 1~14. Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고 show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다.
-const MODE_MAX = 15;
+const MODE_MAX = 14;
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function dbGetModeRow() {
   try {
@@ -396,10 +396,10 @@ async function dbGetState() {
         dbGetModeRow(),
       ]);
       if (!error && data) {
-        // real mode 1~15 lives in the marker row; before it exists: old 9 -> 14, old 10 (9 without timer) -> 15
+        // real mode 1~14 lives in the marker row; before it exists: old 9 -> 13, old 10 (9 without timer) -> 14
         const normalized = rowMode ? { ...data, mode: rowMode }
-          : data.mode === 9 ? { ...data, mode: data.timer_started_at ? 14 : 15 }
-          : data.mode === 10 ? { ...data, mode: 15 } : data;
+          : data.mode === 9 ? { ...data, mode: data.timer_started_at ? 13 : 14 }
+          : data.mode === 10 ? { ...data, mode: 14 } : data;
         sqliteQueries.setState.run(normalized.mode, normalized.timer_started_at || null, normalized.updated_at);
         return normalized;
       }
