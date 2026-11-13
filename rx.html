@@ -894,11 +894,12 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     "B","S","J","J","B","B","J","J","S","B",
     "S","B","J","B","J","S","S","B","S","B"];
   const TRACKS = {
-    // each waits 1 s after the switch so every phone (they hear of it within ~0.3 s) starts from the top together
-    2: { src: "/assets/rx/mode2-announcement.mp3", delay: 1000 }, // 공연 안내 멘트 (최승원.wav)
+    // mode 2 starts the moment /tx switches (a phone that hears of it ~0.1~0.3 s later joins at that point);
+    // modes 4 and 5 switch the panel at once but their voices start 2 s after the switch
+    2: { src: "/assets/rx/mode2-announcement.mp3", delay: 0 }, // 공연 안내 멘트 (최승원.wav)
     // modes 4 and 5: each number hears its own voice; restarts on entering 4 and again on 5; no number chosen yet -> 지민
-    4: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 1000 },
-    5: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 1000 },
+    4: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 2000 },
+    5: { src: () => VOICE[VOICE_OF[number] || "J"], delay: 2000 },
   };
   const srcOf = (t) => (typeof t.src === "function" ? t.src() : t.src);
   const players = {};
