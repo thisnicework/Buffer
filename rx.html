@@ -320,9 +320,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 // Numbers are one-per-phone: ones other people hold are greyed out live and can't be confirmed.
 (() => {
   const ROW = 36, MAX = 45;
-  // /rx?admin: operator preview. The pill opens the wheel and any 01~40 can be picked to see/hear what
-  // that number gets. Nothing is claimed on the server, so it never takes a seat from the audience.
-  const ADMIN = new URLSearchParams(location.search).has("admin");
+  // /rx?split (only the /split page uses it): operator preview. Any 01~45 can be picked to see/hear what that
+  // number gets. Nothing is claimed on the server, so it never takes a seat from the audience.
+  // The old /rx?admin address is gone: it now opens as an ordinary audience phone.
+  const ADMIN = new URLSearchParams(location.search).has("split");
   window.rxAdmin = ADMIN;
   const root = document.getElementById("picker");
   const trigger = document.getElementById("picker-trigger");
@@ -431,7 +432,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 
   // Normally numbers are handed out first come, first served and the pill only shows this phone's number.
   // The pill opens the wheel only while /tx has "번호 선택 모드" on (admin check option), on every phone
-  // including the admin preview (/rx?admin, /split). First come, first served is the default: pill locked.
+  // including the /split preview. First come, first served is the default: pill locked.
   let pickMode = false;
   const canPick = () => pickMode;
   const setPickable = () => {
