@@ -616,7 +616,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const SHAPE_OF = NOTE_OF.map((n) => (n ? SHAPE_FOR_NOTE[n] : null));
   // Web mode 12: the same shape per number, sounding 도 레 미 파 솔 (C4~G4) instead: ○ 도, △ 레, □ 미, ☆ 파, ✕ 솔
   const DOREMI_FOR_NOTE = { C: "C", D: "D", Eb: "E", G: "F", Bb: "G" };
-  const DOREMI_NAME = { C: "도", D: "레", E: "미", F: "파", G: "솔" };
   const DOREMI_OF = NOTE_OF.map((n) => (n ? DOREMI_FOR_NOTE[n] : null));
   // Mode 11 (web mode 10): 5 melody groups, one per shape (○ 1, △ 2, □ 3, ☆ 4, ✕ 5). Each number keeps the
   // shape it has in the other chapter 3 modes, so its melody follows that shape.
@@ -643,7 +642,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const num = number ? String(number).padStart(2, "0") : ""; // 01~09: same two-digit look as 10~40
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
     if (mode === 0) html = LOGO; // before the show: the logo, the same on every phone (no number needed)
-    else if (mode === 17) html = number ? `<span class="oled-line"><span class="oled-n">${num}</span><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${DOREMI_NAME[DOREMI_OF[number]]}</span></span>` : ""; // web 12: number / shape / 도~솔
+    else if (mode === 17) html = number ? `<span class="oled-line"><span class="oled-n">${num}</span><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${DOREMI_OF[number]}</span></span>` : ""; // web 12: number / shape / C~G (도~솔)
     else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // mode 6 (mute) and 14 (web 8, dingdong): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: shape alone (○ △ □ ☆ ✕) matched to melodies 1~5
