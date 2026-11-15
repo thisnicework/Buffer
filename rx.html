@@ -331,8 +331,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const done = document.getElementById("picker-done");
   let value = 1, settle, committed = null, taken = new Set(), busy = false;
 
-  // the wheel's rows: 01~45, plus 99 in the admin preview (the team's own device, used in mode 13)
-  const VALUES = Array.from({ length: MAX }, (_, i) => i + 1).concat(ADMIN ? [99] : []);
+  // the wheel's rows: 01~45
+  const VALUES = Array.from({ length: MAX }, (_, i) => i + 1);
   window.rxNumberOk = (n) => VALUES.includes(n);
   const rowOf = (n) => Math.max(0, VALUES.indexOf(n));
   const atRow = (r) => VALUES[Math.max(0, Math.min(VALUES.length - 1, r))];
@@ -623,10 +623,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // /tx now has modes 0~11 (old 9, 10 and 13 removed, dingdong moved up to 8). The code below still uses the old
   // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
   // 11 (melody) / 12 (hold).
-  // The new 12 (only device 99 dingdongs) is 16 here. The LED-blink mode was removed; a leftover 13 from before
-  // that change is read as 12 too.
-  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 16, 13: 16 };
-  const TEAM_DEVICE = 99; // the team's own device: the only one whose button sounds in web mode 12
+  // Web modes 12 (LED blink) and 13 (device 99 dingdong) were removed; a leftover 12 / 13 in the database is read
+  // as 11, the same as the server does.
+  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 12, 13: 12 };
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
@@ -640,8 +639,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const num = number ? String(number).padStart(2, "0") : ""; // 01~09: same two-digit look as 10~40
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
     if (mode === 0) html = LOGO; // before the show: the logo, the same on every phone (no number needed)
-    else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // also 15 (LEDs blink) and 16 (99 dingdong)
-    else if (number && !NOTE_OF[number] && mode >= 7) html = `<span class="oled-fit" data-ref="00">${num}</span>`; // 99 has no note / shape // mode 6 (mute) and chapter 4 (13, 14): panel stays dark
+    else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // mode 6 (mute) and 14 (web 8, dingdong): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: shape alone (○ △ □ ☆ ✕) matched to melodies 1~5
     else if ((mode === 3 || mode === 4) && state.timerStartedAtMs) html = `<span class="oled-fit" data-ref="888">${remaining()}</span>`; // sized for the widest 3 digits so it doesn't jump each second
@@ -825,7 +823,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   if (window.rxAdmin) { // preview starts on the last number looked at (01 the first time)
     let n = 1;
     try { n = Number(localStorage.getItem("rx-admin-number")) || 1; } catch (_) {}
-    if (!window.rxNumberOk(n)) n = Math.max(1, Math.min(45, n)); // 1~45, or 99 (the team's device)
+    if (!window.rxNumberOk(n)) n = Math.max(1, Math.min(45, n)); // 1~45
     window.rxPicker.setCommitted(n);
     number = n; // the sound setup below isn't defined yet; it picks this number up when the state arrives
   }
@@ -1280,8 +1278,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   function syncMain() {
     const mode = state ? state.mode : 1;
     if (mode === 13) { const src = mainSrc(); if (src) mainPlayer(src); } // start downloading this phone's sound
-    else if (mode === 14 || (mode === 16 && number === TEAM_DEVICE)) mainPlayer(DINGDONG);
-    if (nowMain && mode !== 13 && mode !== 14 && mode !== 16) { nowMain.pause(); nowMain = null; } // leaving these modes silences it
+    else if (mode === 14) mainPlayer(DINGDONG);
+    if (nowMain && mode !== 13 && mode !== 14) { nowMain.pause(); nowMain = null; } // leaving these modes silences it
   }
   setInterval(syncMain, 500);
 
@@ -1305,7 +1303,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // mode 12: handled by rx-down / rx-up (hold to sustain, 15s hold -> 10s fadeout)
     else if (mode === 13) playMain();
     else if (mode === 14) playDingdong();
-    else if (mode === 16 && number === TEAM_DEVICE) playDingdong(); // web mode 13: only device 99, like mode 7's open numbers
   });
   document.addEventListener("rx-down", () => {
     const mode = state ? state.mode : 1;
