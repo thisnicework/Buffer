@@ -624,16 +624,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 // Follow the show: /tx sets the mode, every phone's OLED shows what that mode calls for (DEVICE table, 미니패널 column).
 (() => {
   const oled = document.getElementById("oled-num");
-  // Modes 7~10: each number 1~40 gets one of the 5 notes (C, D, Eb, G, Bb), 8 numbers each, shuffled once
-  // with a fixed seed so neighbouring numbers never share a note and every block of 10 has all 5.
+  // Modes 7~10: each number gets one of the 5 notes 도 레 미 파 솔 (C4 D4 E4 F4 G4), 9 numbers each, shuffled
+  // once with a fixed seed so neighbouring numbers never share a note and every block of 10 has all 5.
   // Modes 8~10 match each of the 5 notes 1-to-1 with one of the 5 shapes (○ △ □ ☆ ✕).
   const NOTE_OF = [null,
-    "G","Eb","G","C","Eb","C","G","D","Bb","D",
-    "G","C","G","C","Bb","G","D","Bb","Eb","C",
-    "D","Bb","D","Eb","G","C","Eb","Bb","D","Bb",
-    "D","G","Bb","D","Eb","Bb","Eb","C","Eb","C",
-    "D","G","Eb","Bb","C"]; // 41~45: one of each note, none next to the same note
-  const SHAPE_FOR_NOTE = { C: "○", D: "△", Eb: "□", G: "☆", Bb: "✕" };
+    "F","E","F","C","E","C","F","D","G","D",
+    "F","C","F","C","G","F","D","G","E","C",
+    "D","G","D","E","F","C","E","G","D","G",
+    "D","F","G","D","E","G","E","C","E","C",
+    "D","F","E","G","C"]; // 41~45: one of each note, none next to the same note
+  const SHAPE_FOR_NOTE = { C: "○", D: "△", E: "□", F: "☆", G: "✕" };
   const SHAPE_OF = NOTE_OF.map((n) => (n ? SHAPE_FOR_NOTE[n] : null));
   // Mode 11 (web mode 10): 5 melody groups, one per shape (○ 1, △ 2, □ 3, ☆ 4, ✕ 5). Each number keeps the
   // shape it has in the other chapter 3 modes, so its melody follows that shape.
@@ -1053,7 +1053,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   setInterval(pullClaims, 4000);
   pull();
 
-  // Modes 7~9: pressing the cap plays this person's short note once (C.wav … Bb.wav from "sos 음정");
+  // Modes 7~9: pressing the cap plays this person's short note once (도 레 미 파 솔, C4~G4);
   // holding the button does not repeat it — you must release and press again to trigger again.
   // Mode 10: a single press plays the 2.5-second extended version of this person's note (mode10-hold-*.mp3).
   // Mode 11: a single press plays this person's melody (1.wav … 4.wav from "sos 음정/멜로디", 4 groups).
@@ -1122,6 +1122,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     return buffers[src];
   }
 
+  // mode12-loop-*.mp3 is a 4 s steady tone; any 3 s stretch holds whole cycles, so repeating 0.5..3.5 s is
+  // seamless (the MP3's own padding at both ends never plays again after the first pass)
+  const LOOP_A = 0.5, LOOP_B = 3.5;
   // Mode 7: hold to sustain continuously for opened numbers; stops when released or number closes
   let holdVoice7 = null; // { node, gain, startedAt, audio }
   function stopHold7(immediate) {
@@ -1156,8 +1159,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const t = actx.currentTime;
       node.buffer = b;
       node.loop = true;
-      node.loopStart = 0;
-      node.loopEnd = b.duration;
+      node.loopStart = LOOP_A;
+      node.loopEnd = Math.min(LOOP_B, b.duration);
       gain.gain.setValueAtTime(1, t);
       node.connect(gain).connect(actx.destination);
       node.start(t, 0);
@@ -1215,8 +1218,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const endTime = t + Math.max(0, fade12End() - now) / 1000;
       node.buffer = b;
       node.loop = true;
-      node.loopStart = 0;
-      node.loopEnd = b.duration;
+      node.loopStart = LOOP_A;
+      node.loopEnd = Math.min(LOOP_B, b.duration);
       gain.gain.setValueAtTime(k, t);
       if (holdTime > t) gain.gain.setValueAtTime(k, holdTime);
       gain.gain.linearRampToValueAtTime(0, endTime);
