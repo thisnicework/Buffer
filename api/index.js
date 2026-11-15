@@ -103,7 +103,7 @@ const csvCell = (v) => `"${String(v).replace(/"/g, '""')}"`;
 
 // DEVICE 공연 상태 & 관객 개인번호 (1~45): Supabase show_state / show_claims (supabase-schema.sql 5~11번)
 const NUM_MAX = 45; // 관객 개인번호 최대값 (Supabase show_claims 의 CHECK 와 claim_show_number 도 같은 값)
-const TIMER_SECONDS = 800;
+const TIMER_SECONDS = 700;
 const SHOW_SECRET = ADMIN_TOKEN || "admin1234";
 const validClient = (v) => typeof v === "string" && /^[A-Za-z0-9-]{8,64}$/.test(v);
 

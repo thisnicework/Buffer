@@ -345,7 +345,7 @@ async function dbAdminDelete(code) {
 // ---- DEVICE 공연 상태 & 관객 개인번호 1~45 (/tx 가 바꾸고 /rx 가 따라감) ----
 const NUM_MAX = 45; // 관객 개인번호 최대값 (Supabase show_claims 의 CHECK 와 claim_show_number 도 같은 값: supabase-schema.sql)
 // Supabase show_state / show_claims 가 원본. 테이블이 아직 없거나 SHOW_STATE=local 이면 로컬 SQLite 로 폴백 동작
-const TIMER_SECONDS = 800;
+const TIMER_SECONDS = 700;
 const SHOW_SECRET = ADMIN_TOKEN || "admin1234";
 const STATE_LOCAL = String(process.env.SHOW_STATE || "").toLowerCase() === "local";
 const validClient = (v) => typeof v === "string" && /^[A-Za-z0-9-]{8,64}$/.test(v);
