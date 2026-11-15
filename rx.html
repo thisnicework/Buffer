@@ -186,9 +186,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .ov.ant-b{transform:translateZ(calc(var(--w) * .03))}
 .ov.ant-f{transform:translateZ(calc(var(--w) * .062))}
 .ov.ant-s{transform:translateZ(calc(var(--w) * .004))}
-.ov.leds{transform:translateZ(calc(var(--w) * .005))}
-#leds{opacity:0}
-#leds.on{opacity:1}
 .ov .edge{
   position:absolute;left:calc(10 / 696 * 100%);top:calc(20 / 900 * 100%);
   width:calc(260 / 696 * 100%);height:calc(385 / 900 * 100%);
@@ -291,25 +288,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
             <path d="M645 571 L645 551" stroke="#3c4247" stroke-width="5.6" stroke-linecap="round" fill="none"/>
             <path d="M645 571 L645 551" stroke="#c9ced2" stroke-width="3.2" stroke-linecap="round" fill="none"/>
             <g id="ant-front" fill="none" stroke-linecap="round" stroke-linejoin="round"></g>
-          </svg>
-        </div>
-        <!-- the two built-in LEDs on the board (white 0603 parts in board.png: top edge by the OLED, and next to Q5);
-             lit only while mode 12 blinks them -->
-        <div class="ov leds">
-          <svg viewBox="0 0 696 900" aria-hidden="true">
-            <defs>
-              <radialGradient id="ledGlow">
-                <stop offset="0" stop-color="#fff" stop-opacity=".95"/>
-                <stop offset=".35" stop-color="#e8f1ff" stop-opacity=".55"/>
-                <stop offset="1" stop-color="#cfe0ff" stop-opacity="0"/>
-              </radialGradient>
-            </defs>
-            <g id="leds">
-              <ellipse cx="445" cy="33" rx="46" ry="34" fill="url(#ledGlow)"/>
-              <rect x="433" y="26" width="24" height="14" rx="2" fill="#fff"/>
-              <ellipse cx="257" cy="718" rx="46" ry="34" fill="url(#ledGlow)"/>
-              <rect x="245" y="711" width="24" height="14" rx="2" fill="#fff"/>
-            </g>
           </svg>
         </div>
         <div class="ov btn2"><svg id="btn-svg" viewBox="0 0 696 900" aria-hidden="true"></svg></div>
@@ -645,9 +623,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // /tx now has modes 0~11 (old 9, 10 and 13 removed, dingdong moved up to 8). The code below still uses the old
   // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
   // 11 (melody) / 12 (hold).
-  // The new 12 (built-in LEDs blink) and 13 (only device 99 dingdongs) are 15 and 16 here.
-  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 15, 13: 16 };
-  const TEAM_DEVICE = 99; // the team's own device: the only one whose button sounds in mode 13
+  // The new 12 (only device 99 dingdongs) is 16 here. The LED-blink mode was removed; a leftover 13 from before
+  // that change is read as 12 too.
+  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 16, 13: 16 };
+  const TEAM_DEVICE = 99; // the team's own device: the only one whose button sounds in web mode 12
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
@@ -1305,14 +1284,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (nowMain && mode !== 13 && mode !== 14 && mode !== 16) { nowMain.pause(); nowMain = null; } // leaving these modes silences it
   }
   setInterval(syncMain, 500);
-
-  // Web mode 12: the board's two built-in LEDs blink, 0.5 s on / 0.5 s off, counted from the moment /tx switched
-  // (server clock), so every phone blinks together.
-  const leds = document.getElementById("leds");
-  setInterval(() => {
-    const on = !!(state && state.mode === 15 && Math.floor((Date.now() + offset - state.updatedAtMs) / 500) % 2 === 0);
-    if (leds.classList.contains("on") !== on) leds.classList.toggle("on", on);
-  }, 50);
 
   // Mode 7 is opened number by number from /tx, following the numbers on the stage monitor:
   // each number is switched on / off on its own: bits 0~4 = 17, 32, 11, 31, 10, bit 5 = everyone.
