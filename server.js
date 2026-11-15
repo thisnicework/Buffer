@@ -353,7 +353,7 @@ const validClient = (v) => typeof v === "string" && /^[A-Za-z0-9-]{8,64}$/.test(
 function statePayload(row) {
   const ms = (v) => (v ? new Date(v).getTime() : null);
   return {
-    mode: row.mode,
+    mode: Math.min(row.mode, MODE_MAX), // a leftover from a removed mode (e.g. 13) reads as the last one
     timerStartedAtMs: ms(row.timer_started_at),
     updatedAtMs: ms(row.updated_at),
     timerSeconds: TIMER_SECONDS,
@@ -376,9 +376,9 @@ function warnClaimsOnce(msg) {
   console.warn(`⚠️  [Supabase] show_claims 를 쓸 수 없어 로컬 DB로 관객 번호를 저장합니다 (${msg}). supabase-schema.sql 5~11번을 실행하면 사라집니다.`);
 }
 
-// 모드는 0~11 (0 = 공연 전 BUFFER 로고). Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
+// 모드는 0~12 (0 = 공연 전 BUFFER 로고). Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고 show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다.
-const MODE_MAX = 11;
+const MODE_MAX = 12;
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function dbGetModeRow() {
   try {
@@ -408,7 +408,7 @@ async function dbGetState() {
       if (!error && data) {
         // real mode 0~11 lives in the marker row; before it exists: old 9 / 10 (main sound / dingdong) -> 8 (dingdong)
         const normalized = rowMode != null ? { ...data, mode: Math.min(rowMode, MODE_MAX) }
-          : data.mode === 9 || data.mode === 10 ? { ...data, mode: 8 } : data;
+          : data.mode === 9 || data.mode === 10 ? { ...data, mode: 8 } : { ...data, mode: Math.min(data.mode, MODE_MAX) };
         sqliteQueries.setState.run(normalized.mode, normalized.timer_started_at || null, normalized.updated_at);
         return normalized;
       }

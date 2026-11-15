@@ -603,17 +603,21 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 // Follow the show: /tx sets the mode, every phone's OLED shows what that mode calls for (DEVICE table, 미니패널 column).
 (() => {
   const oled = document.getElementById("oled-num");
-  // Modes 7~10: each number gets one of the 5 notes 도 레 미 파 솔 (C4 D4 E4 F4 G4), 9 numbers each, shuffled
-  // once with a fixed seed so neighbouring numbers never share a note and every block of 10 has all 5.
+  // Modes 7~10: each number gets one of the 5 recorded notes (C, D, Eb, G, Bb), 9 numbers each, shuffled once
+  // with a fixed seed so neighbouring numbers never share a note and every block of 10 has all 5.
   // Modes 8~10 match each of the 5 notes 1-to-1 with one of the 5 shapes (○ △ □ ☆ ✕).
   const NOTE_OF = [null,
-    "F","E","F","C","E","C","F","D","G","D",
-    "F","C","F","C","G","F","D","G","E","C",
-    "D","G","D","E","F","C","E","G","D","G",
-    "D","F","G","D","E","G","E","C","E","C",
-    "D","F","E","G","C"]; // 41~45: one of each note, none next to the same note
-  const SHAPE_FOR_NOTE = { C: "○", D: "△", E: "□", F: "☆", G: "✕" };
+    "G","Eb","G","C","Eb","C","G","D","Bb","D",
+    "G","C","G","C","Bb","G","D","Bb","Eb","C",
+    "D","Bb","D","Eb","G","C","Eb","Bb","D","Bb",
+    "D","G","Bb","D","Eb","Bb","Eb","C","Eb","C",
+    "D","G","Eb","Bb","C"]; // 41~45: one of each note, none next to the same note
+  const SHAPE_FOR_NOTE = { C: "○", D: "△", Eb: "□", G: "☆", Bb: "✕" };
   const SHAPE_OF = NOTE_OF.map((n) => (n ? SHAPE_FOR_NOTE[n] : null));
+  // Web mode 12: the same shape per number, sounding 도 레 미 파 솔 (C4~G4) instead: ○ 도, △ 레, □ 미, ☆ 파, ✕ 솔
+  const DOREMI_FOR_NOTE = { C: "C", D: "D", Eb: "E", G: "F", Bb: "G" };
+  const DOREMI_NAME = { C: "도", D: "레", E: "미", F: "파", G: "솔" };
+  const DOREMI_OF = NOTE_OF.map((n) => (n ? DOREMI_FOR_NOTE[n] : null));
   // Mode 11 (web mode 10): 5 melody groups, one per shape (○ 1, △ 2, □ 3, ☆ 4, ✕ 5). Each number keeps the
   // shape it has in the other chapter 3 modes, so its melody follows that shape.
   const MELODY_FOR_SHAPE = { "○": 1, "△": 2, "□": 3, "☆": 4, "✕": 5 };
@@ -624,9 +628,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // /tx now has modes 0~11 (old 9, 10 and 13 removed, dingdong moved up to 8). The code below still uses the old
   // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
   // 11 (melody) / 12 (hold).
-  // Web modes 12 (LED blink) and 13 (device 99 dingdong) were removed; a leftover 12 / 13 in the database is read
-  // as 11, the same as the server does.
-  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 12, 13: 12 };
+  // Web 12 (number + shape + 도레미파솔, hold to sustain) is 17 here. A leftover 13 (removed) is read as 12, as the server does.
+  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 17, 13: 17 };
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
@@ -640,6 +643,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const num = number ? String(number).padStart(2, "0") : ""; // 01~09: same two-digit look as 10~40
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
     if (mode === 0) html = LOGO; // before the show: the logo, the same on every phone (no number needed)
+    else if (mode === 17) html = number ? `<span class="oled-line"><span class="oled-n">${num}</span><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${DOREMI_NAME[DOREMI_OF[number]]}</span></span>` : ""; // web 12: number / shape / 도~솔
     else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // mode 6 (mute) and 14 (web 8, dingdong): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: shape alone (○ △ □ ☆ ✕) matched to melodies 1~5
@@ -649,7 +653,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const shape = (mode === 8 || mode === 12) ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
       html = `<span class="oled-line"><span class="oled-n">${num}</span>${shape}<span class="oled-note">${NOTE_OF[number]}</span></span>`;
     }
-    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); fitShape(); if (mode === 7 || mode === 8 || mode === 12) fitStack(); }
+    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); fitShape(); if (mode === 7 || mode === 8 || mode === 12 || mode === 17) fitStack(); }
   }
 
   // Mode 9: the shape alone, its ink scaled to SHAPE_FILL of the panel and centred by the ink itself
@@ -1031,7 +1035,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   setInterval(pullClaims, 4000);
   pull();
 
-  // Modes 7~9: pressing the cap plays this person's short note once (도 레 미 파 솔, C4~G4);
+  // Modes 7~9: pressing the cap plays this person's short note once (recorded C, D, Eb, G, Bb);
   // holding the button does not repeat it — you must release and press again to trigger again.
   // Mode 10: a single press plays the 2.5-second extended version of this person's note (mode10-hold-*.mp3).
   // Mode 11: a single press plays this person's melody (1.wav … 4.wav from "sos 음정/멜로디", 4 groups).
@@ -1100,9 +1104,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     return buffers[src];
   }
 
-  // mode12-loop-*.mp3 is a 4 s steady tone; any 3 s stretch holds whole cycles, so repeating 0.5..3.5 s is
-  // seamless (the MP3's own padding at both ends never plays again after the first pass)
-  const LOOP_A = 0.5, LOOP_B = 3.5;
+  // mode12-loop-*.mp3 (recorded notes) loop whole. mode12-doremi-*.mp3 (web 12) is a 4 s steady tone where any
+  // 3 s stretch holds whole cycles, so it repeats 0.5..3.5 s: seamless, and the MP3's own padding at both ends
+  // never plays again after the first pass.
+  const loopSrc = (note) => `/assets/rx/mode12-loop-${note}.mp3`;
+  const doremiSrc = (n) => `/assets/rx/mode12-doremi-${DOREMI_OF[n]}.mp3`;
+  const setLoop = (node, b, src) => {
+    const dor = src.includes("-doremi-");
+    node.loopStart = dor ? 0.5 : 0;
+    node.loopEnd = dor ? Math.min(3.5, b.duration) : b.duration;
+  };
   // Mode 7: hold to sustain continuously for opened numbers; stops when released or number closes
   let holdVoice7 = null; // { node, gain, startedAt, audio }
   function stopHold7(immediate) {
@@ -1125,11 +1136,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     } catch (_) {}
   }
 
-  function startHold7(note) {
+  // also web 12 (도레미파솔): same hold-to-sustain at full volume, given the doremi file as src
+  function startHold7(src) {
     stopHold7(true);
     if (sounding(nowNote)) nowNote.pause();
     wakeAudio();
-    const src = `/assets/rx/mode12-loop-${note}.mp3`;
     const b = ready[src];
     if (b && actx && actx.state === "running") {
       const node = actx.createBufferSource();
@@ -1137,8 +1148,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const t = actx.currentTime;
       node.buffer = b;
       node.loop = true;
-      node.loopStart = LOOP_A;
-      node.loopEnd = Math.min(LOOP_B, b.duration);
+      setLoop(node, b, src);
       gain.gain.setValueAtTime(1, t);
       node.connect(gain).connect(actx.destination);
       node.start(t, 0);
@@ -1196,8 +1206,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const endTime = t + Math.max(0, fade12End() - now) / 1000;
       node.buffer = b;
       node.loop = true;
-      node.loopStart = LOOP_A;
-      node.loopEnd = Math.min(LOOP_B, b.duration);
+      setLoop(node, b, src);
       gain.gain.setValueAtTime(k, t);
       if (holdTime > t) gain.gain.setValueAtTime(k, holdTime);
       gain.gain.linearRampToValueAtTime(0, endTime);
@@ -1221,7 +1230,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // stop mode 7 / 12 voices if leaving mode or closed, or adjust HTML5 audio fallback volume
   setInterval(() => {
     const m = state ? state.mode : 1;
-    if ((m !== 7 || !number || !mode7Open(number)) && holdVoice7) stopHold7(true);
+    if (m !== 17 && (m !== 7 || !number || !mode7Open(number)) && holdVoice7) stopHold7(true);
     if (m !== 12 && holdVoice12) stopHold12(true);
     if (m === 12 && holdVoice12 && holdVoice12.audio) {
       const k = fade12Level();
@@ -1233,6 +1242,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // preload this phone's chapter 3 audio as soon as the show reaches chapter 3, so the first press sounds at once
   setInterval(() => {
     const m = state ? state.mode : 1;
+    if (m === 17 && number) { notePlayer(doremiSrc(number)); loadBuf(doremiSrc(number)); return; } // web 12
     if (m < 7 || m > 12 || !number || !NOTE_OF[number]) return;
     notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`);
     notePlayer(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
@@ -1307,12 +1317,13 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   });
   document.addEventListener("rx-down", () => {
     const mode = state ? state.mode : 1;
-    if (mode === 7 && number && mode7Open(number)) startHold7(NOTE_OF[number]);
+    if (mode === 7 && number && mode7Open(number)) startHold7(loopSrc(NOTE_OF[number]));
+    else if (mode === 17 && number) startHold7(doremiSrc(number)); // web 12: 도레미파솔 while held
     else if (mode === 12 && number) startHold12(NOTE_OF[number]);
   });
   document.addEventListener("rx-up", () => {
     const mode = state ? state.mode : 1;
-    if (mode === 7) stopHold7(false);
+    if (mode === 7 || mode === 17) stopHold7(false);
     else if (mode === 12) stopHold12(false);
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });

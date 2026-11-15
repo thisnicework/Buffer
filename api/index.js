@@ -136,7 +136,7 @@ async function setPickMode(on) {
 function statePayload(row, step) {
   const ms = (v) => (v ? new Date(v).getTime() : null);
   return {
-    mode: row.mode,
+    mode: Math.min(row.mode, MODE_MAX), // a leftover from a removed mode (e.g. 13) reads as the last one
     timerStartedAtMs: ms(row.timer_started_at),
     updatedAtMs: ms(row.updated_at),
     timerSeconds: TIMER_SECONDS,
@@ -169,10 +169,10 @@ async function setStep(step) {
   return { step };
 }
 
-// 모드는 0~11 (0 = 공연 전 BUFFER 로고). Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
+// 모드는 0~12 (0 = 공연 전 BUFFER 로고). Supabase show_state 의 mode 칸은 오래된 제약(1~9)이 남아 있을 수 있어서, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고, show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다
-// (5 이상은 타이머를 그대로 두므로 9~11 은 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
-const MODE_MAX = 11;
+// (5 이상은 타이머를 그대로 두므로 9~12 는 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
+const MODE_MAX = 12;
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function getModeRow() {
   const { data, error } = await supabase.from("reservations").select("seat").eq("code", MODE_ROW.code).maybeSingle();
@@ -201,7 +201,7 @@ async function readState(res) {
   if (rowMode != null) return { ...data, mode: Math.min(rowMode, MODE_MAX) };
   // 표시용 행이 생기기 전 값: 예전 9·10(메인사운드/띵동) = 지금의 8(띵동)
   if (data.mode === 9 || data.mode === 10) return { ...data, mode: 8 };
-  return data;
+  return { ...data, mode: Math.min(data.mode, MODE_MAX) }; // a leftover from a removed mode (e.g. 13) reads as the last one
 }
 
 async function handler(req, res) {
