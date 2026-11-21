@@ -121,8 +121,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       <button class="next" id="next" type="button">다음 모드</button>
       <p class="err" id="err"></p>
 
-      <section class="step7" id="step7" aria-label="모드 7 소리 열기" hidden>
-        <h2 class="list-title">모드 7 · 번호를 누르면 그 번호 버튼 소리 ON / 다시 누르면 OFF</h2>
+      <section class="step7" id="step7" aria-label="모드 H 소리 열기" hidden>
+        <h2 class="list-title">모드 H · 번호를 누르면 그 번호 버튼 소리 ON / 다시 누르면 OFF</h2>
         <div class="step7-nums" id="step7-nums"></div>
       </section>
 
@@ -174,8 +174,10 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 11, ch: "챕터 3", t: "빨간대문", d: "개인번호+도형+음계 길게 꾹 15초" },
     { n: 12, ch: "챕터 3", t: "빨간대문", d: "개인번호+도형+도레미파솔" },
     { n: 13, ch: "챕터 4", t: "빨간대문", d: "내장 LED 0.2초 간격으로 5번 깜빡" },
-    { n: 14, ch: "챕터 4", t: "빨간대문", d: "개인번호+도형(○ △ □ ☆ ✕)+음계 (모드 9 반복) · 보드 버튼 → 터디" },
+    { n: 14, ch: "챕터 4", t: "빨간대문", d: "개인번호+도형(○ △ □ ☆ ✕)+음계 (모드 J 반복) · 보드 버튼 → 터디" },
   ];
+  // modes are shown as letters A~O (0 = A … 14 = O); the server, boards and TouchDesigner keep the numbers 0~14
+  const L = (n) => String.fromCharCode(65 + n);
   const $ = (id) => document.getElementById(id);
   // chapter label, plus the section title in bold where there is one (modes 1~4: 공간파동)
   const chLabel = (m) => m.ch + (m.t ? ` <b class="ch-t">${m.t}</b>` : "");
@@ -204,7 +206,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   const list = $("modes");
   for (const m of MODES) {
     const li = document.createElement("li");
-    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${m.n}</span><span class="ch">${chLabel(m)}</span><span class="d">${m.d}</span></button>`;
+    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${L(m.n)}</span><span class="ch">${chLabel(m)}</span><span class="d">${m.d}</span></button>`;
     list.appendChild(li);
   }
 
@@ -212,13 +214,13 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     if (!state) return;
     const byN = (n) => MODES.find((x) => x.n === n);
     const m = byN(state.mode) || { ch: "", d: "" };
-    $("now-mode").textContent = "MODE " + state.mode;
+    $("now-mode").textContent = "MODE " + L(state.mode);
     $("now-chapter").innerHTML = chLabel(m);
     $("now-desc").textContent = m.d;
     for (const b of list.querySelectorAll(".mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
     const next = byN(state.mode + 1);
     $("next").disabled = !next || busy;
-    $("next").textContent = next ? `다음 모드 → ${next.n}` : "마지막 모드입니다";
+    $("next").textContent = next ? `다음 모드 → ${L(next.n)}` : "마지막 모드입니다";
     renderStep7();
     tick();
   }
@@ -294,7 +296,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const b = e.target.closest(".mode");
     if (!b || !state || +b.dataset.n === state.mode) return;
     pending = +b.dataset.n;
-    $("confirm-text").textContent = `모드 ${pending}로 바로 전환할까요?`;
+    $("confirm-text").textContent = `모드 ${L(pending)}로 바로 전환할까요?`;
     $("confirm").hidden = false;
     $("confirm-yes").focus();
   });
