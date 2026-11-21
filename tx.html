@@ -27,7 +27,7 @@ body{
 }
 button,input{font:inherit;color:inherit;letter-spacing:inherit}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
 [hidden]{display:none!important}
 
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -46,7 +46,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .now-label{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
 .now-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .now-mode{font-size:44px;font-weight:700;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
-.now-chapter{font-size:14px;color:var(--mute)}
 .now-timer{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
 .now-timer small{font-size:13px;font-weight:400;color:var(--mute);margin-left:4px}
 .now-desc{margin:4px 0 0;color:var(--ink)}
@@ -63,34 +62,37 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .modes{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .modes li+li{border-top:1px solid var(--line)}
 .mode{
-  width:100%;display:grid;grid-template-columns:36px 1fr;gap:4px 12px;align-items:start;
+  width:100%;display:grid;grid-template-columns:36px 1fr;gap:12px;align-items:center;
   padding:14px 16px;border:0;background:var(--paper);text-align:left;cursor:pointer;
 }
 .mode:hover{background:var(--soft)}
-.mode .n{grid-row:span 2;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
-.mode .ch{font-size:12px;color:var(--mute)}
-.ch-t{font-weight:700;color:var(--ink)}
-.mode[aria-current="true"] .ch-t{color:var(--paper)}
+.mode .n{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
 .mode .d{font-size:14px;min-width:0}
 .mode[aria-current="true"]{background:var(--ink);color:var(--paper)}
-/* cue order: "순서 편집" turns on the grips; rows are dragged by the grip (mouse or touch) */
-.order-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+/* two panels: left = every mode A~O (tap to run it), right = the cue order (drag, then save to the server) */
+#console{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:860px){#console{grid-template-columns:minmax(0,1fr)}}
+.panel{display:flex;flex-direction:column;gap:20px;min-width:0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .order-btns{display:flex;gap:8px}
 .order-btns .btn{padding:8px 12px;font-size:13px}
-.order-btns [hidden]{display:none}
-.modes li{position:relative;background:var(--paper)}
-.grip{
-  display:none;position:absolute;top:0;right:0;bottom:0;width:56px;align-items:center;justify-content:center;
-  border:0;background:transparent;color:var(--mute);font-size:22px;cursor:grab;touch-action:none;
-}
-.modes.editing .grip{display:flex}
-.modes.editing .mode{cursor:default;padding-right:64px}
-.modes.editing .mode:hover{background:var(--paper)}
-.modes.editing .mode[aria-current="true"]:hover{background:var(--ink)}
-.modes.editing{border-style:dashed;border-color:var(--ink)}
-.modes li.dragging{z-index:1;box-shadow:0 8px 24px rgba(0,0,0,.18);opacity:.95}
-.modes li.dragging .grip{cursor:grabbing}
-.mode[aria-current="true"] .ch{color:#B9BDC1}
+.order-btns .btn:disabled{border-color:var(--line);color:var(--mute);background:var(--paper);cursor:default}
+.cue li{display:flex;align-items:center;gap:12px;padding:10px 4px 10px 14px;background:var(--paper);user-select:none;-webkit-user-select:none}
+.cue .pos{width:22px;font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums}
+.cue .n{width:24px;font-size:20px;font-weight:700}
+.cue .d{flex:1;min-width:0;font-size:14px}
+.cue .now-tag{font-size:11px;font-weight:700;padding:2px 6px;border-radius:6px;background:var(--ink);color:var(--paper)}
+.cue .grip{width:48px;align-self:stretch;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:22px;cursor:grab;touch-action:none}
+.cue li.dragging{position:relative;z-index:1;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.cue li.dragging .grip{cursor:grabbing}
+/* server save state: green = saved and checked, amber = changes not saved yet, red = save failed / server unreachable */
+.save-state{margin:0;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink)}
+.sdot{width:9px;height:9px;border-radius:50%;flex:none;background:var(--mute)}
+.save-state[data-s="ok"] .sdot{background:#1F9D55}
+.save-state[data-s="dirty"] .sdot{background:#D69E2E}
+.save-state[data-s="err"] .sdot{background:#C53030}
+.save-state[data-s="err"]{color:#C53030}
 
 /* personal numbers in use + reset between shows */
 .seats{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:14px}
@@ -131,7 +133,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
           <span class="now-mode" id="now-mode">–</span>
           <span class="now-timer" id="now-timer" hidden></span>
         </div>
-        <span class="now-chapter" id="now-chapter"></span>
         <p class="now-desc" id="now-desc"></p>
       </section>
 
@@ -151,14 +152,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <button class="btn" id="pick-toggle" type="button" aria-pressed="false">번호 선택 모드</button>
       </section>
 
-      <div class="order-head">
-        <h2 class="list-title" id="modes-title">모드 직접 선택 (리허설·복구용)</h2>
-        <div class="order-btns">
-          <button class="btn" id="order-edit" type="button">순서 편집</button>
-          <button class="btn" id="order-cancel" type="button" hidden>취소</button>
-          <button class="btn primary" id="order-save" type="button" hidden>순서 저장</button>
-        </div>
-      </div>
+      <h2 class="list-title" id="modes-title">모드 A~O · 누르면 바로 실행</h2>
       <ul class="modes" id="modes" aria-labelledby="modes-title"></ul>
 
       <section class="seats" aria-label="관객 번호">
@@ -169,6 +163,18 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <button class="btn" id="reset-claims" type="button">번호 전체 초기화</button>
       </section>
     </div>
+
+    <section class="panel" aria-labelledby="cue-title">
+      <div class="panel-head">
+        <h2 class="list-title" id="cue-title">순서 설정 · ≡를 끌어서 바꾸고 저장 ("다음 모드"가 이 순서를 따름)</h2>
+        <div class="order-btns">
+          <button class="btn" id="order-revert" type="button" disabled>되돌리기</button>
+          <button class="btn primary" id="order-save" type="button" disabled>순서 저장</button>
+        </div>
+      </div>
+      <p class="save-state" id="cue-state" data-s="wait" role="status"><span class="sdot"></span><span id="cue-state-text">서버 확인 중…</span></p>
+      <ol class="modes cue" id="cue" aria-labelledby="cue-title"></ol>
+    </section>
   </main>
 </div>
 
@@ -184,27 +190,25 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 (() => {
   // DEVICE table: what each mode does on the audience phones
   const MODES = [
-    { n: 0, ch: "공연 시작 전/커튼콜", d: "버퍼 로고" },
-    { n: 1, ch: "챕터 1", t: "공간파동", d: "개인번호 (웹 02~90 짝수)" },
-    { n: 2, ch: "챕터 1", t: "공간파동", d: "공연 안내 멘트" },
-    { n: 3, ch: "챕터 1", t: "공간파동", d: "700초 카운트다운" },
-    { n: 4, ch: "챕터 1", t: "공간파동", d: "카운트다운 유지+인물 발화 1" },
-    { n: 5, ch: "챕터 2", t: "빨간대문", d: "개인번호+인물 발화 2" },
-    { n: 6, ch: "챕터 2", t: "빨간대문", d: "디바이스 모든 기능 MUTE" },
-    { n: 7, ch: "챕터 3", t: "빨간대문", d: "17/32/11/10/31번/전체 버튼 ON" },
-    { n: 8, ch: "챕터 3", t: "빨간대문", d: "버튼 띵동" },
-    { n: 9, ch: "챕터 3", t: "빨간대문", d: "개인번호+도형(○ △ □ ☆ ✕)+음계" },
-    { n: 10, ch: "챕터 3", t: "빨간대문", d: "도형(○ △ □ ☆ ✕)+멜로디" },
-    { n: 11, ch: "챕터 3", t: "빨간대문", d: "개인번호+도형+음계 길게 꾹 15초" },
-    { n: 12, ch: "챕터 3", t: "빨간대문", d: "개인번호+도형+도레미파솔" },
-    { n: 13, ch: "챕터 4", t: "빨간대문", d: "내장 LED 0.2초 간격으로 5번 깜빡" },
-    { n: 14, ch: "챕터 4", t: "빨간대문", d: "개인번호+도형(○ △ □ ☆ ✕)+음계 (모드 J 반복) · 보드 버튼 → 터디" },
+    { n: 0, d: "버퍼 로고" },
+    { n: 1, d: "개인번호 (웹 02~90 짝수)" },
+    { n: 2, d: "공연 안내 멘트" },
+    { n: 3, d: "700초 카운트다운" },
+    { n: 4, d: "카운트다운 유지+인물 발화 1" },
+    { n: 5, d: "개인번호+인물 발화 2" },
+    { n: 6, d: "디바이스 모든 기능 MUTE" },
+    { n: 7, d: "17/32/11/10/31번/전체 버튼 ON" },
+    { n: 8, d: "버튼 띵동" },
+    { n: 9, d: "개인번호+도형(○ △ □ ☆ ✕)+음계" },
+    { n: 10, d: "도형(○ △ □ ☆ ✕)+멜로디" },
+    { n: 11, d: "개인번호+도형+음계 길게 꾹 15초" },
+    { n: 12, d: "개인번호+도형+도레미파솔" },
+    { n: 13, d: "내장 LED 0.2초 간격으로 5번 깜빡" },
+    { n: 14, d: "개인번호+도형(○ △ □ ☆ ✕)+음계 (모드 J 반복) · 보드 버튼 → 터디" },
   ];
   // modes are shown as letters A~O (0 = A … 14 = O); the server, boards and TouchDesigner keep the numbers 0~14
   const L = (n) => String.fromCharCode(65 + n);
   const $ = (id) => document.getElementById(id);
-  // chapter label, plus the section title in bold where there is one (modes 1~4: 공간파동)
-  const chLabel = (m) => m.ch + (m.t ? ` <b class="ch-t">${m.t}</b>` : "");
   let state = null, offset = 0, pending = null, busy = false;
 
   const setStatus = (ok, text) => {
@@ -226,94 +230,124 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     return j;
   }
 
-  // list, in the saved cue order (each mode keeps its letter; only the order changes)
+  // left: every mode A~O, always in letter order (tap = run it)
   const list = $("modes");
   const byN = (n) => MODES.find((x) => x.n === n);
-  let order = MODES.map((m) => m.n); // A, B, C … until the saved order arrives
-  let editing = false;
-  function renderList(seq) {
-    list.innerHTML = "";
-    for (const n of seq) {
+  for (const m of MODES) {
+    const li = document.createElement("li");
+    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${L(m.n)}</span><span class="d">${m.d}</span></button>`;
+    list.appendChild(li);
+  }
+
+  // right: the cue order. The server only stores this chart; "다음 모드" runs the next letter in it.
+  // order = what the server holds (last confirmed), the list on screen may differ until "순서 저장".
+  const cue = $("cue");
+  let order = MODES.map((m) => m.n); // A, B, C … until the server's chart arrives
+  let serverKnown = false, saving = false;
+  const draft = () => [...cue.children].map((li) => +li.dataset.n);
+  const dirty = () => draft().join() !== order.join();
+  const hhmmss = () => { const d = new Date(), p = (v) => String(v).padStart(2, "0"); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
+  function setSaveState(s, text) {
+    $("cue-state").dataset.s = s;
+    $("cue-state-text").textContent = text;
+  }
+  function refreshSaveUi(okText) {
+    const d = dirty();
+    $("order-save").disabled = !d || saving;
+    $("order-revert").disabled = !d || saving;
+    if (saving) setSaveState("wait", "서버에 저장 중…");
+    else if (d) setSaveState("dirty", "저장 안 됨 · 바꾼 순서가 아직 서버에 없어요");
+    else if (okText) setSaveState("ok", okText);
+  }
+  function renderCue(seq) {
+    cue.innerHTML = "";
+    seq.forEach((n, i) => {
       const m = byN(n);
-      if (!m) continue;
+      if (!m) return;
       const li = document.createElement("li");
       li.dataset.n = n;
-      li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${L(m.n)}</span><span class="ch">${chLabel(m)}</span><span class="d">${m.d}</span></button>`
-        + `<span class="grip" aria-hidden="true">≡</span>`;
-      list.appendChild(li);
-    }
+      li.innerHTML = `<span class="pos">${i + 1}</span><span class="n">${L(m.n)}</span><span class="d">${m.d}</span><span class="now-tag" hidden>지금</span><span class="grip" aria-hidden="true">≡</span>`;
+      cue.appendChild(li);
+    });
     render();
   }
-  const listOrder = () => [...list.children].map((li) => +li.dataset.n);
+  const renumber = () => [...cue.children].forEach((li, i) => { li.querySelector(".pos").textContent = i + 1; });
   async function loadOrder() {
-    if (editing) return; // don't pull the list out from under a drag
+    if (saving || drag) return;
     try {
-      const j = await (await fetch("/api/modeorder", { cache: "no-store" })).json();
-      if (Array.isArray(j.order) && j.order.join() !== order.join()) { order = j.order; renderList(order); }
-    } catch (_) {}
+      const r = await fetch("/api/modeorder", { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || !Array.isArray(j.order)) throw new Error();
+      const changed = j.order.join() !== order.join();
+      const wasDirty = serverKnown && dirty();
+      order = j.order;
+      serverKnown = true;
+      if (!wasDirty && (changed || !cue.children.length)) renderCue(order); // never overwrite unsaved changes
+      refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
+    } catch (_) {
+      setSaveState("err", "서버 연결 안 됨 · 저장 상태를 확인할 수 없어요");
+    }
   }
-  function setEditing(on) {
-    editing = on;
-    list.classList.toggle("editing", on);
-    $("order-edit").hidden = on;
-    $("order-cancel").hidden = !on;
-    $("order-save").hidden = !on;
-  }
-  $("order-edit").addEventListener("click", () => { $("err").textContent = ""; setEditing(true); });
-  $("order-cancel").addEventListener("click", () => { setEditing(false); renderList(order); });
+  $("order-revert").addEventListener("click", () => { renderCue(order); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`); });
   $("order-save").addEventListener("click", async () => {
-    const next = listOrder();
-    $("order-save").disabled = true;
-    $("err").textContent = "";
+    const want = draft();
+    saving = true; refreshSaveUi();
     try {
-      const r = await fetch("/api/modeorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: next }) });
+      const r = await fetch("/api/modeorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: want }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.message || "순서 저장 실패 (" + r.status + ")");
-      order = j.order || next;
-      setEditing(false);
-      renderList(order);
-    } catch (e) { $("err").textContent = e.message; }
-    finally { $("order-save").disabled = false; }
+      if (!r.ok) throw new Error(j.message || "서버 응답 " + r.status);
+      // read it back so "저장됨" means the server really holds this order
+      const back = await (await fetch("/api/modeorder", { cache: "no-store" })).json();
+      if (!Array.isArray(back.order) || back.order.join() !== want.join()) throw new Error("서버에 다른 순서가 남아 있어요");
+      order = back.order;
+      saving = false;
+      render();
+      refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 저장 완료`);
+    } catch (e) {
+      saving = false;
+      refreshSaveUi();
+      setSaveState("err", "저장 실패 · " + (e.message || "서버에 연결할 수 없어요"));
+    }
   });
-  // drag by the grip: the row follows the pointer and the others make room
+  // drag by the grip (touch or mouse); with a mouse the whole row can be grabbed
   let drag = null;
-  list.addEventListener("pointerdown", (e) => {
-    const g = e.target.closest(".grip");
-    if (!g || !editing) return;
+  cue.addEventListener("pointerdown", (e) => {
+    const li = e.target.closest("li");
+    if (!li || saving || (!e.target.closest(".grip") && e.pointerType !== "mouse")) return;
     e.preventDefault();
-    const li = g.parentElement;
     drag = { li, id: e.pointerId };
-    g.setPointerCapture(e.pointerId);
+    li.setPointerCapture(e.pointerId);
     li.classList.add("dragging");
   });
-  list.addEventListener("pointermove", (e) => {
+  cue.addEventListener("pointermove", (e) => {
     if (!drag || e.pointerId !== drag.id) return;
-    const rows = [...list.children].filter((x) => x !== drag.li);
-    const before = rows.find((x) => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
-    if (before !== drag.li.nextElementSibling || (!before && drag.li !== list.lastElementChild)) list.insertBefore(drag.li, before || null);
+    const rows = [...cue.children].filter((x) => x !== drag.li);
+    const before = rows.find((x) => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; }) || null;
+    if (drag.li.nextElementSibling !== before) { cue.insertBefore(drag.li, before); renumber(); }
   });
   const endDrag = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
     drag.li.classList.remove("dragging");
     drag = null;
+    refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
   };
-  list.addEventListener("pointerup", endDrag);
-  list.addEventListener("pointercancel", endDrag);
+  cue.addEventListener("pointerup", endDrag);
+  cue.addEventListener("pointercancel", endDrag);
 
-  // the mode after the current one in the cue order (null at the end)
+  // the mode after the current one in the saved cue order (null at the end)
   const nextInOrder = () => {
     const i = order.indexOf(state.mode);
     return i >= 0 && i + 1 < order.length ? byN(order[i + 1]) : null;
   };
-  renderList(order);
+  renderCue(order);
 
   function render() {
     if (!state) return;
-    const m = byN(state.mode) || { ch: "", d: "" };
+    const m = byN(state.mode) || { d: "" };
     $("now-mode").textContent = "MODE " + L(state.mode);
-    $("now-chapter").innerHTML = chLabel(m);
     $("now-desc").textContent = m.d;
     for (const b of list.querySelectorAll(".mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
+    for (const li of cue.children) li.querySelector(".now-tag").hidden = +li.dataset.n !== state.mode;
     const next = nextInOrder();
     $("next").disabled = !next || busy;
     $("next").textContent = next ? `다음 모드 → ${L(next.n)}` : "마지막 모드입니다";
@@ -389,7 +423,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   $("next").addEventListener("click", () => { const n = state && nextInOrder(); if (n) setMode(n.n); }); // follows the cue order
 
   list.addEventListener("click", (e) => {
-    if (editing) return; // while reordering, a tap never switches the show
+
     const b = e.target.closest(".mode");
     if (!b || !state || +b.dataset.n === state.mode) return;
     pending = +b.dataset.n;
