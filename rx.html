@@ -118,7 +118,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .oled-shape{font-size:.8em;line-height:1;letter-spacing:0}
 .oled-shape-only{display:inline-block;line-height:1;letter-spacing:0;white-space:nowrap} /* mode 9: size and centring set by fitShape() */
 /* mode 0: the BUFFER 버퍼 logo with its dots, cropped to its ink (viewBox) and as wide as the panel */
-.oled-logo{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 calc(var(--w) * .006) rgba(235,242,255,.7))}
+.oled-num.wide{width:calc(252 / 696 * 100%)} /* mode 0: the logo covers the whole window, grey strip included */
+.oled-logo{display:block;width:100%;height:100%;overflow:hidden;filter:drop-shadow(0 0 calc(var(--w) * .006) rgba(235,242,255,.7))}
 .oled-shape.tri{} /* the △ glyph draws much larger than ● and □; shrink it to match */ /* under the number, both centred */
 /* text shown above the case, centred, when the button is clicked */
 @font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}
@@ -299,8 +300,12 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
           <svg viewBox="0 0 696 900" aria-hidden="true">
             <defs>
               <radialGradient id="ledGlow">
-                <stop offset="0" stop-color="#fff" stop-opacity=".95"/>
-                <stop offset=".35" stop-color="#e8f1ff" stop-opacity=".55"/>
+                <stop offset="0" stop-color="#fff" stop-opacity=".9"/>
+                <stop offset=".12" stop-color="#f4f8ff" stop-opacity=".6"/>
+                <stop offset=".28" stop-color="#e8f1ff" stop-opacity=".3"/>
+                <stop offset=".45" stop-color="#dfeaff" stop-opacity=".13"/>
+                <stop offset=".65" stop-color="#d6e4ff" stop-opacity=".045"/>
+                <stop offset=".82" stop-color="#cfe0ff" stop-opacity=".012"/>
                 <stop offset="1" stop-color="#cfe0ff" stop-opacity="0"/>
               </radialGradient>
             </defs>
@@ -656,7 +661,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
   // The "BUFFER 버퍼" letters (x 460..1537, y 617..801, centre 998.5 / 709) sit at the panel's centre: the viewBox is
   // the smallest box centred on them that still holds every dot.
-  const LOGO = `<svg class="oled-logo" viewBox="322 -1641 860 1400" preserveAspectRatio="none" role="img" aria-label="BUFFER 버퍼"><filter id="logo-lift" x="0" y="0" width="1" height="1"><feComponentTransfer><feFuncA type="linear" slope="3.5"/></feComponentTransfer></filter><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418" transform="rotate(-90)" filter="url(#logo-lift)"/></svg>`; // turned 90° left so it runs along the tall panel
+  // Turned 90° left and scaled up (same proportions) to fill the whole panel window, grey strip included; only the
+  // sparse outer dots are cropped (text spans x 465..1540, y 615..800 of the image).
+  const LOGO = `<svg class="oled-logo" viewBox="330 -1560 755 1120" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418" transform="rotate(-90)"/></svg>`;
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
@@ -674,7 +681,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const shape = (mode === 8 || mode === 12) ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
       html = `<span class="oled-line"><span class="oled-n">${num}</span>${shape}<span class="oled-note">${NOTE_OF[number]}</span></span>`;
     }
-    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); fitShape(); if (mode === 7 || mode === 8 || mode === 12 || mode === 17) fitStack(); }
+    if (html !== last) { oled.innerHTML = html; last = html; oled.classList.toggle("wide", mode === 0); alignShape(); fitText(); fitShape(); if (mode === 7 || mode === 8 || mode === 12 || mode === 17) fitStack(); }
   }
 
   // Mode 9: the shape alone, its ink scaled to SHAPE_FILL of the panel and centred by the ink itself
