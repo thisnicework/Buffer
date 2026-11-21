@@ -76,6 +76,13 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .tabs{display:flex;padding:3px;border-radius:10px;background:var(--soft)}
 .tabs button{padding:6px 14px;border:0;border-radius:8px;background:transparent;color:var(--mute);font-size:13px;font-weight:700;cursor:pointer}
 .tabs button[aria-selected="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.view-ctrls{display:flex;align-items:center;gap:8px}
+/* RUN: while it's on, a tap on any mode row switches the show to it at once (no confirm) */
+.run{padding:9px 14px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--mute);font-size:13px;font-weight:800;letter-spacing:.04em;cursor:pointer}
+.run[aria-pressed="true"]{background:#D92D20;border-color:#D92D20;color:#fff}
+.mode-lists:not(.armed) .mode{cursor:default}
+.mode-lists:not(.armed) .mode:hover{background:var(--paper)}
+.mode-lists:not(.armed) .mode[aria-current="true"]:hover{background:var(--ink)}
 .view{display:flex;flex-direction:column;gap:12px}
 .order-btns{display:flex;gap:8px}
 .order-btns .btn{padding:8px 12px;font-size:13px}
@@ -160,10 +167,13 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 
       <section class="mode-lists" aria-labelledby="modes-title">
         <div class="panel-head">
-          <h2 class="list-title" id="modes-title">모드 · 누르면 바로 실행</h2>
+          <h2 class="list-title" id="modes-title">모드 · RUN을 켜고 누르면 바로 실행</h2>
+          <div class="view-ctrls">
+          <button type="button" class="run" id="run-toggle" aria-pressed="false" title="켜져 있는 동안 모드를 누르면 바로 전환">RUN</button>
           <div class="tabs" role="tablist" aria-label="모드 보기">
             <button type="button" role="tab" id="tab-cue" aria-controls="view-cue" aria-selected="true">순서</button>
             <button type="button" role="tab" id="tab-abc" aria-controls="view-abc" aria-selected="false">A~O</button>
+          </div>
           </div>
         </div>
 
@@ -453,16 +463,21 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 
   $("next").addEventListener("click", () => { const n = state && nextInOrder(); if (n) setMode(n.n); }); // follows the cue order
 
-  const askRun = (e) => { // a tap on a row in either view: confirm, then run that mode
+  // RUN: off = tapping a row does nothing (safe to look around / drag); on = a tap switches the show at once.
+  // Always starts off when the page opens.
+  let runOn = false;
+  $("run-toggle").addEventListener("click", () => {
+    runOn = !runOn;
+    $("run-toggle").setAttribute("aria-pressed", String(runOn));
+    document.querySelector(".mode-lists").classList.toggle("armed", runOn);
+  });
+  const runTap = (e) => { // a tap on a row in either view
     const b = e.target.closest(".mode");
-    if (!b || !state || +b.dataset.n === state.mode) return;
-    pending = +b.dataset.n;
-    $("confirm-text").textContent = `모드 ${L(pending)}로 바로 전환할까요?`;
-    $("confirm").hidden = false;
-    $("confirm-yes").focus();
+    if (!runOn || !b || !state || busy || +b.dataset.n === state.mode) return;
+    setMode(+b.dataset.n);
   };
-  list.addEventListener("click", askRun);
-  cue.addEventListener("click", askRun);
+  list.addEventListener("click", runTap);
+  cue.addEventListener("click", runTap);
   $("confirm-no").addEventListener("click", () => { pending = null; $("confirm").hidden = true; });
   $("confirm-yes").addEventListener("click", () => {
     const n = pending; pending = null; $("confirm").hidden = true;
