@@ -187,8 +187,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .ov.ant-f{transform:translateZ(calc(var(--w) * .062))}
 .ov.ant-s{transform:translateZ(calc(var(--w) * .004))}
 .ov.leds{transform:translateZ(calc(var(--w) * .005))}
-#leds{opacity:0}
-#leds.on{opacity:1}
+#leds{opacity:0} /* opacity, glow size and fade set from the LED interval script */
+#leds .glow{transform-box:fill-box;transform-origin:center;transform:scale(var(--glow,1));transition:inherit}
 .ov .edge{
   position:absolute;left:calc(10 / 696 * 100%);top:calc(20 / 900 * 100%);
   width:calc(260 / 696 * 100%);height:calc(385 / 900 * 100%);
@@ -294,7 +294,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
           </svg>
         </div>
         <!-- the two built-in LEDs on the board (white 0603 parts in board.png: top edge by the OLED, and next to Q5);
-             lit only while mode 13 blinks them -->
+             lit in web mode 0 (brighter while the button is held) and while mode 13 blinks them -->
         <div class="ov leds">
           <svg viewBox="0 0 696 900" aria-hidden="true">
             <defs>
@@ -305,9 +305,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
               </radialGradient>
             </defs>
             <g id="leds">
-              <ellipse cx="445" cy="33" rx="46" ry="34" fill="url(#ledGlow)"/>
+              <ellipse class="glow" cx="445" cy="33" rx="46" ry="34" fill="url(#ledGlow)"/>
               <rect x="433" y="26" width="24" height="14" rx="2" fill="#fff"/>
-              <ellipse cx="257" cy="718" rx="46" ry="34" fill="url(#ledGlow)"/>
+              <ellipse class="glow" cx="257" cy="718" rx="46" ry="34" fill="url(#ledGlow)"/>
               <rect x="245" y="711" width="24" height="14" rx="2" fill="#fff"/>
             </g>
           </svg>
@@ -656,7 +656,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
   // The "BUFFER 버퍼" letters (x 460..1537, y 617..801, centre 998.5 / 709) sit at the panel's centre: the viewBox is
   // the smallest box centred on them that still holds every dot.
-  const LOGO = `<svg class="oled-logo" viewBox="322 -1641 860 1400" preserveAspectRatio="none" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418" transform="rotate(-90)"/></svg>`; // turned 90° left so it runs along the tall panel
+  const LOGO = `<svg class="oled-logo" viewBox="322 -1641 860 1400" preserveAspectRatio="none" role="img" aria-label="BUFFER 버퍼"><filter id="logo-lift" x="0" y="0" width="1" height="1"><feComponentTransfer><feFuncA type="linear" slope="3.5"/></feComponentTransfer></filter><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418" transform="rotate(-90)" filter="url(#logo-lift)"/></svg>`; // turned 90° left so it runs along the tall panel
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
@@ -1317,11 +1317,25 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 
   // Web mode 13: the board's two built-in LEDs blink 5 times, 0.2 s on / 0.2 s off (2 s in all), counted from the
   // moment /tx switched (server clock) so every phone blinks together; then they stay off. Panel dark, button silent.
+  // Web mode 0: the LEDs stay lit; pressing the button turns them up to full, and on release they ease back down.
   const leds = document.getElementById("leds");
+  let ledHeld = false;
+  document.addEventListener("rx-down", () => { ledHeld = true; });
+  document.addEventListener("rx-up", () => { ledHeld = false; });
   setInterval(() => {
-    const t = state && state.mode === 15 ? Date.now() + offset - state.updatedAtMs : -1;
-    const on = t >= 0 && t < 2000 && Math.floor(t / 200) % 2 === 0;
-    if (leds.classList.contains("on") !== on) leds.classList.toggle("on", on);
+    const m = state ? state.mode : -1;
+    let op = 0, glow = "1", tr = "none";
+    if (m === 15) {
+      const t = Date.now() + offset - state.updatedAtMs;
+      op = t >= 0 && t < 2000 && Math.floor(t / 200) % 2 === 0 ? 1 : 0;
+    } else if (m === 0) {
+      op = ledHeld ? 1 : 0.55;
+      glow = ledHeld ? "2.4" : "1";
+      tr = ledHeld ? "opacity .12s ease-out, transform .12s ease-out" : "opacity 1.8s ease-out, transform 1.8s ease-out";
+    }
+    if (leds.style.transition !== tr) leds.style.transition = tr;
+    if (leds.style.getPropertyValue("--glow") !== glow) leds.style.setProperty("--glow", glow);
+    if (leds.style.opacity !== String(op)) leds.style.opacity = String(op);
   }, 20);
 
   // Mode 7 is opened number by number from /tx, following the numbers on the stage monitor:
