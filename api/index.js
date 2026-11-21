@@ -133,6 +133,42 @@ async function setPickMode(on) {
   return { pickMode: !!on };
 }
 
+// /tx 모드 순서 (드래그로 바꾼 큐 순서). 모드는 글자 A~O(= 0~14)로 고정이고, 순서만 저장한다.
+// 번호 선택 모드처럼 reservations 의 표시용 행 하나(show_id ORDER, code MODE-ORDER)의 name 칸에 "ABDC…" 글자열로 둔다.
+const ORDER_ROW = { show_id: "ORDER", seat: 0, code: "MODE-ORDER", phone: "mode-order" };
+let memOrder = null;
+const defaultOrder = () => Array.from({ length: MODE_MAX + 1 }, (_, i) => i);
+// 저장된 순서를 정리: 없는/중복 모드는 빼고, 나중에 새로 생긴 모드는 끝에 붙인다
+function normOrder(list) {
+  const seen = new Set();
+  const out = [];
+  for (const n of Array.isArray(list) ? list : []) {
+    if (Number.isInteger(n) && n >= 0 && n <= MODE_MAX && !seen.has(n)) { seen.add(n); out.push(n); }
+  }
+  for (const n of defaultOrder()) if (!seen.has(n)) out.push(n);
+  return out;
+}
+const lettersToOrder = (s) => [...String(s || "")].map((c) => c.charCodeAt(0) - 65);
+const orderToLetters = (o) => o.map((n) => String.fromCharCode(65 + n)).join("");
+async function getOrder() {
+  if (isStateLocal()) return normOrder(memOrder);
+  const { data, error } = await supabase.from("reservations").select("name").eq("code", ORDER_ROW.code).maybeSingle();
+  return normOrder(!error && data ? lettersToOrder(data.name) : null);
+}
+async function setOrder(order) {
+  if (isStateLocal()) { memOrder = order; return { order }; }
+  const name = orderToLetters(order);
+  const { data, error } = await supabase.from("reservations").update({ name }).eq("code", ORDER_ROW.code).select("id");
+  if (error) return { error: error.message };
+  if (!data || !data.length) {
+    const ins = await supabase.from("reservations").insert({ ...ORDER_ROW, name, created_at: new Date().toISOString() });
+    if (ins.error) return { error: ins.error.message };
+  }
+  return { order };
+}
+// 받은 순서가 모든 모드를 한 번씩 담은 목록인지
+const isFullOrder = (o) => Array.isArray(o) && o.length === MODE_MAX + 1 && normOrder(o).every((n, i) => n === o[i]);
+
 function statePayload(row, step) {
   const ms = (v) => (v ? new Date(v).getTime() : null);
   return {
@@ -436,6 +472,17 @@ async function handler(req, res) {
     const taken = list.map((r) => r.num);
     const mineRow = validClient(client) ? list.find((r) => r.client_id === client) : null;
     return send(res, 200, { taken, mine: mineRow ? mineRow.num : null, pickMode });
+  }
+
+  if (route === "GET /api/modeorder") {
+    return send(res, 200, { order: await getOrder() });
+  }
+  if (route === "POST /api/modeorder") {
+    const b = await getJson(req);
+    if (!isFullOrder(b.order)) return send(res, 400, { error: "order", message: "모드 순서가 올바르지 않습니다." });
+    const r = await setOrder(b.order);
+    if (r.error) return send(res, 503, { error: "order", message: `모드 순서를 저장하지 못했습니다: ${r.error}` });
+    return send(res, 200, r);
   }
 
   if (route === "GET /api/pickmode") {

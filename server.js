@@ -561,6 +561,50 @@ async function dbSetPickMode(on) {
   return { pickMode: pickModeLocal };
 }
 
+// ---- /tx 모드 순서 (드래그로 바꾼 큐 순서). 모드는 글자 A~O(= 0~14)로 고정이고, 순서만 저장한다 ----
+// 번호 선택 모드처럼 reservations 의 표시용 행 하나(show_id ORDER, code MODE-ORDER)의 name 칸에 "ABDC…" 글자열로 둔다.
+const ORDER_ROW = { show_id: "ORDER", seat: 0, code: "MODE-ORDER", phone: "mode-order" };
+let orderLocal = null;
+const defaultOrder = () => Array.from({ length: MODE_MAX + 1 }, (_, i) => i);
+// 저장된 순서를 정리: 없는/중복 모드는 빼고, 나중에 새로 생긴 모드는 끝에 붙인다
+function normOrder(list) {
+  const seen = new Set();
+  const out = [];
+  for (const n of Array.isArray(list) ? list : []) {
+    if (Number.isInteger(n) && n >= 0 && n <= MODE_MAX && !seen.has(n)) { seen.add(n); out.push(n); }
+  }
+  for (const n of defaultOrder()) if (!seen.has(n)) out.push(n);
+  return out;
+}
+const lettersToOrder = (s) => [...String(s || "")].map((c) => c.charCodeAt(0) - 65);
+const orderToLetters = (o) => o.map((n) => String.fromCharCode(65 + n)).join("");
+async function dbGetOrder() {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const { data, error } = await supabase.from("reservations").select("name").eq("code", ORDER_ROW.code).maybeSingle();
+      if (!error) return normOrder(data ? lettersToOrder(data.name) : null);
+    } catch (_) {}
+  }
+  return normOrder(orderLocal);
+}
+async function dbSetOrder(order) {
+  if (supabase && !STATE_LOCAL) {
+    try {
+      const name = orderToLetters(order);
+      const { data, error } = await supabase.from("reservations").update({ name }).eq("code", ORDER_ROW.code).select("id");
+      if (error) return { error: error.message };
+      if (!data || !data.length) {
+        const ins = await supabase.from("reservations").insert({ ...ORDER_ROW, name, created_at: new Date().toISOString() });
+        if (ins.error) return { error: ins.error.message };
+      }
+    } catch (e) { return { error: e.message }; }
+  }
+  orderLocal = order;
+  return { order };
+}
+// 받은 순서가 모든 모드를 한 번씩 담은 목록인지
+const isFullOrder = (o) => Array.isArray(o) && o.length === MODE_MAX + 1 && normOrder(o).every((n, i) => n === o[i]);
+
 // ---- 모드 7 단계: 무대 모니터 숫자를 따라 소리 낼 번호를 하나씩 연다 ----
 // 0 아무도, 1: 17, 2: +32, 3: +11, 4: +31, 5: +10, 6: 전체. 모드 7로 들어올 때 0으로 돌아감.
 // 이제는 /tx 에서 번호를 눌러 하나씩 켜고 끈다: 비트 0~4 = 17, 32, 11, 31, 10, 비트 5 = 전체 (0~63).
@@ -769,6 +813,17 @@ async function api(req, res, url) {
     const client = url.searchParams.get("client");
     const [claims, pickMode] = await Promise.all([dbGetClaims(client), dbGetPickMode()]);
     return send(res, 200, { ...claims, pickMode });
+  }
+
+  if (route === "GET /api/modeorder") {
+    return send(res, 200, { order: await dbGetOrder() });
+  }
+  if (route === "POST /api/modeorder") {
+    const b = await readJson(req);
+    if (!isFullOrder(b.order)) return send(res, 400, { error: "order", message: "모드 순서가 올바르지 않습니다." });
+    const r = await dbSetOrder(b.order);
+    if (r.error) return send(res, 503, { error: "order", message: `모드 순서를 저장하지 못했습니다: ${r.error}` });
+    return send(res, 200, r);
   }
 
   if (route === "GET /api/pickmode") {

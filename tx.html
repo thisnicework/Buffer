@@ -51,6 +51,12 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .now-timer small{font-size:13px;font-weight:400;color:var(--mute);margin-left:4px}
 .now-desc{margin:4px 0 0;color:var(--ink)}
 
+.next{
+  width:100%;padding:18px;border:0;border-radius:14px;background:var(--ink);color:var(--paper);
+  font-size:19px;font-weight:700;cursor:pointer;letter-spacing:-.02em;
+}
+.next:disabled{background:var(--soft);color:var(--mute);cursor:default}
+.next:not(:disabled):active{transform:scale(.99)}
 
 /* mode list */
 .list-title{margin:0;font-size:13px;color:var(--mute)}
@@ -67,6 +73,23 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .mode[aria-current="true"] .ch-t{color:var(--paper)}
 .mode .d{font-size:14px;min-width:0}
 .mode[aria-current="true"]{background:var(--ink);color:var(--paper)}
+/* cue order: "순서 편집" turns on the grips; rows are dragged by the grip (mouse or touch) or moved with ↑/↓ on it */
+.order-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.order-btns{display:flex;gap:8px}
+.order-btns .btn{padding:8px 12px;font-size:13px}
+.order-btns [hidden]{display:none}
+.modes li{position:relative;background:var(--paper)}
+.grip{
+  display:none;position:absolute;top:0;right:0;bottom:0;width:56px;align-items:center;justify-content:center;
+  border:0;background:transparent;color:var(--mute);font-size:22px;cursor:grab;touch-action:none;
+}
+.modes.editing .grip{display:flex}
+.modes.editing .mode{cursor:default;padding-right:64px}
+.modes.editing .mode:hover{background:var(--paper)}
+.modes.editing .mode[aria-current="true"]:hover{background:var(--ink)}
+.modes.editing{border-style:dashed;border-color:var(--ink)}
+.modes li.dragging{z-index:1;box-shadow:0 8px 24px rgba(0,0,0,.18);opacity:.95}
+.modes li.dragging .grip{cursor:grabbing}
 .mode[aria-current="true"] .ch{color:#B9BDC1}
 
 /* personal numbers in use + reset between shows */
@@ -112,10 +135,11 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <p class="now-desc" id="now-desc"></p>
       </section>
 
+      <button class="next" id="next" type="button">다음 모드</button>
       <p class="err" id="err"></p>
 
-      <section class="step7" id="step7" aria-label="모드 7 소리 열기" hidden>
-        <h2 class="list-title">모드 7 · 번호를 누르면 그 번호 버튼 소리 ON / 다시 누르면 OFF</h2>
+      <section class="step7" id="step7" aria-label="모드 H 소리 열기" hidden>
+        <h2 class="list-title">모드 H · 번호를 누르면 그 번호 버튼 소리 ON / 다시 누르면 OFF</h2>
         <div class="step7-nums" id="step7-nums"></div>
       </section>
 
@@ -127,8 +151,15 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <button class="btn" id="pick-toggle" type="button" aria-pressed="false">번호 선택 모드</button>
       </section>
 
-      <h2 class="list-title">모드 직접 선택 (리허설·복구용)</h2>
-      <ul class="modes" id="modes"></ul>
+      <div class="order-head">
+        <h2 class="list-title" id="modes-title">모드 직접 선택 (리허설·복구용)</h2>
+        <div class="order-btns">
+          <button class="btn" id="order-edit" type="button">순서 편집</button>
+          <button class="btn" id="order-cancel" type="button" hidden>취소</button>
+          <button class="btn primary" id="order-save" type="button" hidden>순서 저장</button>
+        </div>
+      </div>
+      <ul class="modes" id="modes" aria-labelledby="modes-title"></ul>
 
       <section class="seats" aria-label="관객 번호">
         <div>
@@ -167,8 +198,10 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 11, ch: "챕터 3", t: "빨간대문", d: "개인번호+도형+음계 길게 꾹 15초" },
     { n: 12, ch: "챕터 3", t: "빨간대문", d: "개인번호+도형+도레미파솔" },
     { n: 13, ch: "챕터 4", t: "빨간대문", d: "내장 LED 0.2초 간격으로 5번 깜빡" },
-    { n: 14, ch: "챕터 4", t: "빨간대문", d: "개인번호+도형(○ △ □ ☆ ✕)+음계 (모드 9 반복) · 보드 버튼 → 터디" },
+    { n: 14, ch: "챕터 4", t: "빨간대문", d: "개인번호+도형(○ △ □ ☆ ✕)+음계 (모드 J 반복) · 보드 버튼 → 터디" },
   ];
+  // modes are shown as letters A~O (0 = A … 14 = O); the server, boards and TouchDesigner keep the numbers 0~14
+  const L = (n) => String.fromCharCode(65 + n);
   const $ = (id) => document.getElementById(id);
   // chapter label, plus the section title in bold where there is one (modes 1~4: 공간파동)
   const chLabel = (m) => m.ch + (m.t ? ` <b class="ch-t">${m.t}</b>` : "");
@@ -193,22 +226,109 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     return j;
   }
 
-  // list
+  // list, in the saved cue order (each mode keeps its letter; only the order changes)
   const list = $("modes");
-  for (const m of MODES) {
-    const li = document.createElement("li");
-    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${m.n}</span><span class="ch">${chLabel(m)}</span><span class="d">${m.d}</span></button>`;
-    list.appendChild(li);
+  const byN = (n) => MODES.find((x) => x.n === n);
+  let order = MODES.map((m) => m.n); // A, B, C … until the saved order arrives
+  let editing = false;
+  function renderList(seq) {
+    list.innerHTML = "";
+    for (const n of seq) {
+      const m = byN(n);
+      if (!m) continue;
+      const li = document.createElement("li");
+      li.dataset.n = n;
+      li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${L(m.n)}</span><span class="ch">${chLabel(m)}</span><span class="d">${m.d}</span></button>`
+        + `<button type="button" class="grip" aria-label="모드 ${L(m.n)} 순서 옮기기 (↑/↓ 키)" tabindex="${editing ? 0 : -1}">≡</button>`;
+      list.appendChild(li);
+    }
+    render();
   }
+  const listOrder = () => [...list.children].map((li) => +li.dataset.n);
+  async function loadOrder() {
+    if (editing) return; // don't pull the list out from under a drag
+    try {
+      const j = await (await fetch("/api/modeorder", { cache: "no-store" })).json();
+      if (Array.isArray(j.order) && j.order.join() !== order.join()) { order = j.order; renderList(order); }
+    } catch (_) {}
+  }
+  function setEditing(on) {
+    editing = on;
+    list.classList.toggle("editing", on);
+    $("order-edit").hidden = on;
+    $("order-cancel").hidden = !on;
+    $("order-save").hidden = !on;
+    for (const g of list.querySelectorAll(".grip")) g.tabIndex = on ? 0 : -1;
+  }
+  $("order-edit").addEventListener("click", () => { $("err").textContent = ""; setEditing(true); });
+  $("order-cancel").addEventListener("click", () => { setEditing(false); renderList(order); });
+  $("order-save").addEventListener("click", async () => {
+    const next = listOrder();
+    $("order-save").disabled = true;
+    $("err").textContent = "";
+    try {
+      const r = await fetch("/api/modeorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: next }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || "순서 저장 실패 (" + r.status + ")");
+      order = j.order || next;
+      setEditing(false);
+      renderList(order);
+    } catch (e) { $("err").textContent = e.message; }
+    finally { $("order-save").disabled = false; }
+  });
+  // drag by the grip: the row follows the pointer and the others make room
+  let drag = null;
+  list.addEventListener("pointerdown", (e) => {
+    const g = e.target.closest(".grip");
+    if (!g || !editing) return;
+    e.preventDefault();
+    const li = g.parentElement;
+    drag = { li, id: e.pointerId };
+    g.setPointerCapture(e.pointerId);
+    li.classList.add("dragging");
+  });
+  list.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const rows = [...list.children].filter((x) => x !== drag.li);
+    const before = rows.find((x) => { const r = x.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+    if (before !== drag.li.nextElementSibling || (!before && drag.li !== list.lastElementChild)) list.insertBefore(drag.li, before || null);
+  });
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    drag.li.classList.remove("dragging");
+    drag.li.querySelector(".grip").focus();
+    drag = null;
+  };
+  list.addEventListener("pointerup", endDrag);
+  list.addEventListener("pointercancel", endDrag);
+  // keyboard: ↑/↓ on a grip moves that row
+  list.addEventListener("keydown", (e) => {
+    const g = e.target.closest(".grip");
+    if (!g || !editing || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault();
+    const li = g.parentElement;
+    if (e.key === "ArrowUp" && li.previousElementSibling) list.insertBefore(li, li.previousElementSibling);
+    if (e.key === "ArrowDown" && li.nextElementSibling) list.insertBefore(li.nextElementSibling, li);
+    g.focus();
+  });
+
+  // the mode after the current one in the cue order (null at the end)
+  const nextInOrder = () => {
+    const i = order.indexOf(state.mode);
+    return i >= 0 && i + 1 < order.length ? byN(order[i + 1]) : null;
+  };
+  renderList(order);
 
   function render() {
     if (!state) return;
-    const byN = (n) => MODES.find((x) => x.n === n);
     const m = byN(state.mode) || { ch: "", d: "" };
-    $("now-mode").textContent = "MODE " + state.mode;
+    $("now-mode").textContent = "MODE " + L(state.mode);
     $("now-chapter").innerHTML = chLabel(m);
     $("now-desc").textContent = m.d;
     for (const b of list.querySelectorAll(".mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
+    const next = nextInOrder();
+    $("next").disabled = !next || busy;
+    $("next").textContent = next ? `다음 모드 → ${L(next.n)}` : "마지막 모드입니다";
     renderStep7();
     tick();
   }
@@ -278,12 +398,14 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     }
   }
 
+  $("next").addEventListener("click", () => { const n = state && nextInOrder(); if (n) setMode(n.n); }); // follows the cue order
 
   list.addEventListener("click", (e) => {
+    if (editing) return; // while reordering, a tap never switches the show
     const b = e.target.closest(".mode");
     if (!b || !state || +b.dataset.n === state.mode) return;
     pending = +b.dataset.n;
-    $("confirm-text").textContent = `모드 ${pending}로 바로 전환할까요?`;
+    $("confirm-text").textContent = `모드 ${L(pending)}로 바로 전환할까요?`;
     $("confirm").hidden = false;
     $("confirm-yes").focus();
   });
@@ -346,9 +468,10 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     $("confirm-yes").focus();
   });
 
-  setInterval(() => { refresh(); refreshClaims(); }, 3000); // stay in sync if another operator changes the mode
+  setInterval(() => { refresh(); refreshClaims(); loadOrder(); }, 3000); // stay in sync if another operator changes the mode or order
   refresh();
   refreshClaims();
+  loadOrder();
 })();
 </script>
 </body>
