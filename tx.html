@@ -51,12 +51,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .now-timer small{font-size:13px;font-weight:400;color:var(--mute);margin-left:4px}
 .now-desc{margin:4px 0 0;color:var(--ink)}
 
-.next{
-  width:100%;padding:18px;border:0;border-radius:14px;background:var(--ink);color:var(--paper);
-  font-size:19px;font-weight:700;cursor:pointer;letter-spacing:-.02em;
-}
-.next:disabled{background:var(--soft);color:var(--mute);cursor:default}
-.next:not(:disabled):active{transform:scale(.99)}
 
 /* mode list */
 .list-title{margin:0;font-size:13px;color:var(--mute)}
@@ -118,7 +112,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <p class="now-desc" id="now-desc"></p>
       </section>
 
-      <button class="next" id="next" type="button">다음 모드</button>
       <p class="err" id="err"></p>
 
       <section class="step7" id="step7" aria-label="모드 H 소리 열기" hidden>
@@ -218,9 +211,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     $("now-chapter").innerHTML = chLabel(m);
     $("now-desc").textContent = m.d;
     for (const b of list.querySelectorAll(".mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
-    const next = byN(state.mode + 1);
-    $("next").disabled = !next || busy;
-    $("next").textContent = next ? `다음 모드 → ${L(next.n)}` : "마지막 모드입니다";
     renderStep7();
     tick();
   }
@@ -290,7 +280,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     }
   }
 
-  $("next").addEventListener("click", () => { if (state && MODES.some((x) => x.n === state.mode + 1)) setMode(state.mode + 1); });
 
   list.addEventListener("click", (e) => {
     const b = e.target.closest(".mode");
