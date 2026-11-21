@@ -27,7 +27,7 @@ body{
 }
 button,input{font:inherit;color:inherit;letter-spacing:inherit}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
 [hidden]{display:none!important}
 
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -70,20 +70,26 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .mode .d{font-size:14px;min-width:0}
 .mode[aria-current="true"]{background:var(--ink);color:var(--paper)}
 
-/* two panels: left = every mode A~O (tap to run it), right = the cue order (drag, then save to the server) */
-#console{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
-@media (max-width:860px){#console{grid-template-columns:minmax(0,1fr)}}
-.panel{display:flex;flex-direction:column;gap:20px;min-width:0}
+/* mode list with two views (tabs top-right of the title): 순서 = the saved cue order, A~O = letter order */
+.mode-lists{display:flex;flex-direction:column;gap:12px}
 .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.tabs{display:flex;padding:3px;border-radius:10px;background:var(--soft)}
+.tabs button{padding:6px 14px;border:0;border-radius:8px;background:transparent;color:var(--mute);font-size:13px;font-weight:700;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.view{display:flex;flex-direction:column;gap:12px}
 .order-btns{display:flex;gap:8px}
 .order-btns .btn{padding:8px 12px;font-size:13px}
 .order-btns .btn:disabled{border-color:var(--line);color:var(--mute);background:var(--paper);cursor:default}
-.cue li{display:flex;align-items:center;gap:12px;padding:10px 4px 10px 14px;background:var(--paper);user-select:none;-webkit-user-select:none}
+.cue li{display:flex;align-items:stretch;background:var(--paper)}
+.cue .mode{display:flex;align-items:center;gap:12px;flex:1;min-width:0;padding:12px 4px 12px 14px}
 .cue .pos{width:22px;font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums}
-.cue .n{width:24px;font-size:20px;font-weight:700}
+.cue .n{width:24px;font-size:20px}
 .cue .d{flex:1;min-width:0;font-size:14px}
 .cue .now-tag{font-size:11px;font-weight:700;padding:2px 6px;border-radius:6px;background:var(--ink);color:var(--paper)}
-.cue .grip{width:48px;align-self:stretch;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:22px;cursor:grab;touch-action:none}
+.cue .mode[aria-current="true"] .pos{color:#B9BDC1}
+.cue .mode[aria-current="true"] .now-tag{background:var(--paper);color:var(--ink)}
+.cue li:has(.mode[aria-current="true"]) .grip{background:var(--ink);color:#B9BDC1}
+.cue .grip{width:52px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:22px;cursor:grab;touch-action:none}
 .cue li.dragging{position:relative;z-index:1;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .cue li.dragging .grip{cursor:grabbing}
 /* server save state: green = saved and checked, amber = changes not saved yet, red = save failed / server unreachable */
@@ -152,8 +158,32 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <button class="btn" id="pick-toggle" type="button" aria-pressed="false">번호 선택 모드</button>
       </section>
 
-      <h2 class="list-title" id="modes-title">모드 A~O · 누르면 바로 실행</h2>
-      <ul class="modes" id="modes" aria-labelledby="modes-title"></ul>
+      <section class="mode-lists" aria-labelledby="modes-title">
+        <div class="panel-head">
+          <h2 class="list-title" id="modes-title">모드 · 누르면 바로 실행</h2>
+          <div class="tabs" role="tablist" aria-label="모드 보기">
+            <button type="button" role="tab" id="tab-cue" aria-controls="view-cue" aria-selected="true">순서</button>
+            <button type="button" role="tab" id="tab-abc" aria-controls="view-abc" aria-selected="false">A~O</button>
+          </div>
+        </div>
+
+        <!-- 순서: the saved cue order ("다음 모드" follows it); ≡ drags a row, then 순서 저장 -->
+        <div class="view" id="view-cue" role="tabpanel" aria-labelledby="tab-cue">
+          <div class="panel-head">
+            <p class="save-state" id="cue-state" data-s="wait" role="status"><span class="sdot"></span><span id="cue-state-text">서버 확인 중…</span></p>
+            <div class="order-btns">
+              <button class="btn" id="order-revert" type="button" disabled>되돌리기</button>
+              <button class="btn primary" id="order-save" type="button" disabled>순서 저장</button>
+            </div>
+          </div>
+          <ol class="modes cue" id="cue" aria-label="모드 순서 (≡를 끌어서 바꿈)"></ol>
+        </div>
+
+        <!-- A~O: every mode in letter order -->
+        <div class="view" id="view-abc" role="tabpanel" aria-labelledby="tab-abc" hidden>
+          <ul class="modes" id="modes" aria-label="모드 A~O"></ul>
+        </div>
+      </section>
 
       <section class="seats" aria-label="관객 번호">
         <div>
@@ -163,18 +193,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <button class="btn" id="reset-claims" type="button">번호 전체 초기화</button>
       </section>
     </div>
-
-    <section class="panel" aria-labelledby="cue-title">
-      <div class="panel-head">
-        <h2 class="list-title" id="cue-title">순서 설정 · ≡를 끌어서 바꾸고 저장 ("다음 모드"가 이 순서를 따름)</h2>
-        <div class="order-btns">
-          <button class="btn" id="order-revert" type="button" disabled>되돌리기</button>
-          <button class="btn primary" id="order-save" type="button" disabled>순서 저장</button>
-        </div>
-      </div>
-      <p class="save-state" id="cue-state" data-s="wait" role="status"><span class="sdot"></span><span id="cue-state-text">서버 확인 중…</span></p>
-      <ol class="modes cue" id="cue" aria-labelledby="cue-title"></ol>
-    </section>
   </main>
 </div>
 
@@ -266,7 +284,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       if (!m) return;
       const li = document.createElement("li");
       li.dataset.n = n;
-      li.innerHTML = `<span class="pos">${i + 1}</span><span class="n">${L(m.n)}</span><span class="d">${m.d}</span><span class="now-tag" hidden>지금</span><span class="grip" aria-hidden="true">≡</span>`;
+      li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="pos">${i + 1}</span><span class="n">${L(m.n)}</span><span class="d">${m.d}</span><span class="now-tag" hidden>지금</span></button><span class="grip" aria-hidden="true">≡</span>`;
       cue.appendChild(li);
     });
     render();
@@ -309,11 +327,11 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       setSaveState("err", "저장 실패 · " + (e.message || "서버에 연결할 수 없어요"));
     }
   });
-  // drag by the grip (touch or mouse); with a mouse the whole row can be grabbed
+  // drag by the grip (touch or mouse); tapping the rest of the row runs that mode, like the A~O list
   let drag = null;
   cue.addEventListener("pointerdown", (e) => {
-    const li = e.target.closest("li");
-    if (!li || saving || (!e.target.closest(".grip") && e.pointerType !== "mouse")) return;
+    const li = e.target.closest(".grip") && e.target.closest("li");
+    if (!li || saving) return;
     e.preventDefault();
     drag = { li, id: e.pointerId };
     li.setPointerCapture(e.pointerId);
@@ -334,6 +352,19 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   cue.addEventListener("pointerup", endDrag);
   cue.addEventListener("pointercancel", endDrag);
 
+  // two views of the same modes: 순서 (cue order) / A~O; the choice is remembered on this screen
+  function showTab(which) {
+    const cueOn = which !== "abc";
+    $("tab-cue").setAttribute("aria-selected", String(cueOn));
+    $("tab-abc").setAttribute("aria-selected", String(!cueOn));
+    $("view-cue").hidden = !cueOn;
+    $("view-abc").hidden = cueOn;
+    try { localStorage.setItem("tx-mode-view", cueOn ? "cue" : "abc"); } catch (_) {}
+  }
+  $("tab-cue").addEventListener("click", () => showTab("cue"));
+  $("tab-abc").addEventListener("click", () => showTab("abc"));
+  try { showTab(localStorage.getItem("tx-mode-view") || "cue"); } catch (_) { showTab("cue"); }
+
   // the mode after the current one in the saved cue order (null at the end)
   const nextInOrder = () => {
     const i = order.indexOf(state.mode);
@@ -346,7 +377,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const m = byN(state.mode) || { d: "" };
     $("now-mode").textContent = "MODE " + L(state.mode);
     $("now-desc").textContent = m.d;
-    for (const b of list.querySelectorAll(".mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
+    for (const b of document.querySelectorAll("#modes .mode, #cue .mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
     for (const li of cue.children) li.querySelector(".now-tag").hidden = +li.dataset.n !== state.mode;
     const next = nextInOrder();
     $("next").disabled = !next || busy;
@@ -422,15 +453,16 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 
   $("next").addEventListener("click", () => { const n = state && nextInOrder(); if (n) setMode(n.n); }); // follows the cue order
 
-  list.addEventListener("click", (e) => {
-
+  const askRun = (e) => { // a tap on a row in either view: confirm, then run that mode
     const b = e.target.closest(".mode");
     if (!b || !state || +b.dataset.n === state.mode) return;
     pending = +b.dataset.n;
     $("confirm-text").textContent = `모드 ${L(pending)}로 바로 전환할까요?`;
     $("confirm").hidden = false;
     $("confirm-yes").focus();
-  });
+  };
+  list.addEventListener("click", askRun);
+  cue.addEventListener("click", askRun);
   $("confirm-no").addEventListener("click", () => { pending = null; $("confirm").hidden = true; });
   $("confirm-yes").addEventListener("click", () => {
     const n = pending; pending = null; $("confirm").hidden = true;
