@@ -73,7 +73,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .mode[aria-current="true"] .ch-t{color:var(--paper)}
 .mode .d{font-size:14px;min-width:0}
 .mode[aria-current="true"]{background:var(--ink);color:var(--paper)}
-/* cue order: "순서 편집" turns on the grips; rows are dragged by the grip (mouse or touch) or moved with ↑/↓ on it */
+/* cue order: "순서 편집" turns on the grips; rows are dragged by the grip (mouse or touch) */
 .order-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .order-btns{display:flex;gap:8px}
 .order-btns .btn{padding:8px 12px;font-size:13px}
@@ -239,7 +239,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       const li = document.createElement("li");
       li.dataset.n = n;
       li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="n">${L(m.n)}</span><span class="ch">${chLabel(m)}</span><span class="d">${m.d}</span></button>`
-        + `<button type="button" class="grip" aria-label="모드 ${L(m.n)} 순서 옮기기 (↑/↓ 키)" tabindex="${editing ? 0 : -1}">≡</button>`;
+        + `<span class="grip" aria-hidden="true">≡</span>`;
       list.appendChild(li);
     }
     render();
@@ -258,7 +258,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     $("order-edit").hidden = on;
     $("order-cancel").hidden = !on;
     $("order-save").hidden = !on;
-    for (const g of list.querySelectorAll(".grip")) g.tabIndex = on ? 0 : -1;
   }
   $("order-edit").addEventListener("click", () => { $("err").textContent = ""; setEditing(true); });
   $("order-cancel").addEventListener("click", () => { setEditing(false); renderList(order); });
@@ -296,21 +295,10 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   const endDrag = (e) => {
     if (!drag || e.pointerId !== drag.id) return;
     drag.li.classList.remove("dragging");
-    drag.li.querySelector(".grip").focus();
     drag = null;
   };
   list.addEventListener("pointerup", endDrag);
   list.addEventListener("pointercancel", endDrag);
-  // keyboard: ↑/↓ on a grip moves that row
-  list.addEventListener("keydown", (e) => {
-    const g = e.target.closest(".grip");
-    if (!g || !editing || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
-    e.preventDefault();
-    const li = g.parentElement;
-    if (e.key === "ArrowUp" && li.previousElementSibling) list.insertBefore(li, li.previousElementSibling);
-    if (e.key === "ArrowDown" && li.nextElementSibling) list.insertBefore(li.nextElementSibling, li);
-    g.focus();
-  });
 
   // the mode after the current one in the cue order (null at the end)
   const nextInOrder = () => {
