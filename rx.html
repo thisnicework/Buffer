@@ -118,7 +118,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .oled-shape{font-size:.8em;line-height:1;letter-spacing:0}
 .oled-shape-only{display:inline-block;line-height:1;letter-spacing:0;white-space:nowrap} /* mode 9: size and centring set by fitShape() */
 /* mode 0: the BUFFER 버퍼 logo with its dots, cropped to its ink (viewBox) and as wide as the panel */
-.oled-logo{display:block;width:100%;height:auto;overflow:visible;filter:drop-shadow(0 0 calc(var(--w) * .006) rgba(235,242,255,.7))}
+.oled-logo{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 calc(var(--w) * .006) rgba(235,242,255,.7))}
 .oled-shape.tri{} /* the △ glyph draws much larger than ● and □; shrink it to match */ /* under the number, both centred */
 /* text shown above the case, centred, when the button is clicked */
 @font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}
@@ -656,7 +656,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
   // The "BUFFER 버퍼" letters (x 460..1537, y 617..801, centre 998.5 / 709) sit at the panel's centre: the viewBox is
   // the smallest box centred on them that still holds every dot.
-  const LOGO = `<svg class="oled-logo" viewBox="250 -1741 918 1485" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418" transform="rotate(-90)"/></svg>`; // turned 90° left so it runs along the tall panel
+  const LOGO = `<svg class="oled-logo" viewBox="322 -1641 860 1400" preserveAspectRatio="none" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418" transform="rotate(-90)"/></svg>`; // turned 90° left so it runs along the tall panel
   const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
