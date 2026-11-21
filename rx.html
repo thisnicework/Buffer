@@ -904,6 +904,23 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       .on("postgres_changes", { event: "*", schema: "public", table: "show_claims" }, pullClaims)
       .subscribe();
   } catch (_) {}
+
+  // Button presses go out to TouchDesigner: a Supabase Realtime broadcast on topic "presses" (no database write),
+  // picked up on the show PC by lana_td_bridge.py and turned into OSC. Sent over HTTP so the phones never have to
+  // receive each other's presses. The /split preview never sends.
+  const PRESS_URL = "https://qatrsegoqwandtsasunp.supabase.co/realtime/v1/api/broadcast";
+  const PRESS_KEY = "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3";
+  const sendPress = (s) => {
+    if (window.rxAdmin || !number) return;
+    const payload = { n: number, s, m: raw ? raw.mode : null, t: Math.round(Date.now() + offset) };
+    fetch(PRESS_URL, {
+      method: "POST", keepalive: true,
+      headers: { "Content-Type": "application/json", apikey: PRESS_KEY, Authorization: "Bearer " + PRESS_KEY },
+      body: JSON.stringify({ messages: [{ topic: "presses", event: "press", payload, private: false }] }),
+    }).catch(() => {});
+  };
+  document.addEventListener("rx-down", () => sendPress(1));
+  document.addEventListener("rx-up", () => sendPress(0));
   // Speaker tracks per mode (DEVICE table, 소형스피커 column). Each starts DELAY after /tx switched to that
   // mode, timed on the server clock so every phone starts together (polling lag doesn't matter); a phone
   // that arrives late joins mid-track. Switching mode stops the old track; entering a mode starts its track
