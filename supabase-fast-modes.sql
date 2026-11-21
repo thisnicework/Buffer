@@ -1,11 +1,11 @@
 -- 모드 전환 딜레이 줄이기 (Supabase SQL Editor 에서 한 번 실행)
--- show_state 에 실제 모드 번호(0~13)와 모드 7 번호 ON/OFF(open7)를 바로 담아,
+-- show_state 에 실제 모드 번호(0~14)와 모드 7 번호 ON/OFF(open7)를 바로 담아,
 -- 폰이 Realtime 알림만 받고 곧바로 화면·소리를 바꿀 수 있게 합니다.
 -- 실행 전에도 사이트는 지금처럼 동작하고, 실행하면 그때부터 빨라집니다.
 
--- 1. 모드 범위 0~13, open7 칸 추가
+-- 1. 모드 범위 0~14, open7 칸 추가
 ALTER TABLE public.show_state DROP CONSTRAINT IF EXISTS show_state_mode_check;
-ALTER TABLE public.show_state ADD CONSTRAINT show_state_mode_check CHECK (mode BETWEEN 0 AND 13);
+ALTER TABLE public.show_state ADD CONSTRAINT show_state_mode_check CHECK (mode BETWEEN 0 AND 14);
 ALTER TABLE public.show_state ADD COLUMN IF NOT EXISTS open7 INTEGER NOT NULL DEFAULT 0 CHECK (open7 BETWEEN 0 AND 63);
 
 -- 2. 모드 변경: 실제 번호 그대로 저장. 모드 7 로 들어오면 번호 ON/OFF 는 모두 꺼짐(0)
@@ -24,7 +24,7 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.show_control WHERE id = 1 AND secret = p_secret) THEN
     RETURN jsonb_build_object('error', 'unauthorized');
   END IF;
-  IF p_mode IS NULL OR p_mode < 0 OR p_mode > 13 THEN
+  IF p_mode IS NULL OR p_mode < 0 OR p_mode > 14 THEN
     RETURN jsonb_build_object('error', 'bad_mode');
   END IF;
 
