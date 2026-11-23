@@ -94,6 +94,13 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .cue .mode[aria-current="true"] .pos{color:#B9BDC1}
 .cue .mode[aria-current="true"] .now-tag{background:var(--paper);color:var(--ink)}
 .cue li:has(.mode[aria-current="true"]) .grip{background:var(--ink);color:#B9BDC1}
+.cue .del{width:44px;flex:none;border:0;background:transparent;color:var(--mute);font-size:16px;cursor:pointer}
+.cue .del:hover{color:#C53030}
+.cue li:has(.mode[aria-current="true"]) .del{background:var(--ink);color:#B9BDC1}
+.removed{display:flex;flex-direction:column;gap:8px}
+.removed-list{display:flex;flex-wrap:wrap;gap:8px}
+.removed-list button{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px dashed var(--mute);border-radius:10px;background:var(--paper);font-size:13px;cursor:pointer}
+.removed-list b{font-size:16px}
 .cue .grip{width:52px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--mute);font-size:22px;cursor:grab;touch-action:none}
 .cue li.dragging{position:relative;z-index:1;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .cue li.dragging .grip{cursor:grabbing}
@@ -183,7 +190,11 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
               <button class="btn primary" id="order-save" type="button" disabled>순서 저장</button>
             </div>
           </div>
-          <ol class="modes cue" id="cue" aria-label="모드 순서 (≡를 끌어서 바꿈)"></ol>
+          <ol class="modes cue" id="cue" aria-label="모드 순서 (≡를 끌어서 바꿈, ✕로 삭제)"></ol>
+          <div class="removed" id="removed" hidden>
+            <h3 class="list-title">삭제한 모드 · 누르면 순서 맨 끝에 다시 들어가요</h3>
+            <div class="removed-list" id="removed-list"></div>
+          </div>
         </div>
 
         <!-- A~O: every mode in letter order -->
@@ -280,23 +291,45 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const d = dirty();
     $("order-save").disabled = !d || saving;
     $("order-revert").disabled = !d || saving;
+    renderRemoved();
     if (saving) setSaveState("wait", "서버에 저장 중…");
     else if (d) setSaveState("dirty", "저장 안 됨 · 바꾼 순서가 아직 서버에 없어요");
     else if (okText) setSaveState("ok", okText);
   }
+  function cueRow(m) {
+    const li = document.createElement("li");
+    li.dataset.n = m.n;
+    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="pos"></span><span class="n">${L(m.n)}</span><span class="d">${m.d}</span><span class="now-tag" hidden>지금</span></button><button type="button" class="del" aria-label="${L(m.n)} 순서에서 삭제" title="순서에서 삭제">✕</button><span class="grip" aria-hidden="true">≡</span>`;
+    return li;
+  }
   function renderCue(seq) {
     cue.innerHTML = "";
-    seq.forEach((n, i) => {
-      const m = byN(n);
-      if (!m) return;
-      const li = document.createElement("li");
-      li.dataset.n = n;
-      li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="pos">${i + 1}</span><span class="n">${L(m.n)}</span><span class="d">${m.d}</span><span class="now-tag" hidden>지금</span></button><span class="grip" aria-hidden="true">≡</span>`;
-      cue.appendChild(li);
-    });
+    for (const n of seq) { const m = byN(n); if (m) cue.appendChild(cueRow(m)); }
+    renumber();
     render();
   }
-  const renumber = () => [...cue.children].forEach((li, i) => { li.querySelector(".pos").textContent = i + 1; });
+  // modes not in the list on screen: shown under it so they can be put back
+  function renderRemoved() {
+    const inList = new Set(draft());
+    const gone = MODES.filter((m) => !inList.has(m.n));
+    $("removed").hidden = !gone.length;
+    $("removed-list").innerHTML = gone.map((m) => `<button type="button" data-n="${m.n}" aria-label="${L(m.n)} 다시 넣기"><b>${L(m.n)}</b>${m.d} ＋</button>`).join("");
+    for (const b of cue.querySelectorAll(".del")) b.disabled = saving || cue.children.length <= 1; // keep at least one
+  }
+  const renumber = () => { [...cue.children].forEach((li, i) => { li.querySelector(".pos").textContent = i + 1; }); renderRemoved(); };
+  // ✕ takes a mode out of the order, a removed one goes back at the end; both need 순서 저장 like a drag
+  cue.addEventListener("click", (e) => {
+    const b = e.target.closest(".del");
+    if (!b || b.disabled || saving) return;
+    b.closest("li").remove();
+    renumber(); render(); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
+  });
+  $("removed-list").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b || saving) return;
+    cue.appendChild(cueRow(byN(+b.dataset.n)));
+    renumber(); render(); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
+  });
   async function loadOrder() {
     if (saving || drag) return;
     try {
@@ -316,6 +349,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   $("order-revert").addEventListener("click", () => { renderCue(order); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`); });
   $("order-save").addEventListener("click", async () => {
     const want = draft();
+    if (!want.length) return;
     saving = true; refreshSaveUi();
     try {
       const r = await fetch("/api/modeorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: want }) });
@@ -375,7 +409,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   // the mode after the current one in the saved cue order (null at the end)
   const nextInOrder = () => {
     const i = order.indexOf(state.mode);
-    return i >= 0 && i + 1 < order.length ? byN(order[i + 1]) : null;
+    if (i < 0) return byN(order[0]); // the current mode was deleted from the order: start from the top
+    return i + 1 < order.length ? byN(order[i + 1]) : null;
   };
   renderCue(order);
 

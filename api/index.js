@@ -138,15 +138,15 @@ async function setPickMode(on) {
 const ORDER_ROW = { show_id: "ORDER", seat: 0, code: "MODE-ORDER", phone: "mode-order" };
 let memOrder = null;
 const defaultOrder = () => Array.from({ length: MODE_MAX + 1 }, (_, i) => i);
-// 저장된 순서를 정리: 없는/중복 모드는 빼고, 나중에 새로 생긴 모드는 끝에 붙인다
+// 저장된 순서를 정리: 없는/중복 모드는 뺀다. /tx에서 삭제한 모드는 순서에 없는 채로 둔다
+// (저장된 순서가 아예 없거나 비었으면 A~O 전체)
 function normOrder(list) {
   const seen = new Set();
   const out = [];
   for (const n of Array.isArray(list) ? list : []) {
     if (Number.isInteger(n) && n >= 0 && n <= MODE_MAX && !seen.has(n)) { seen.add(n); out.push(n); }
   }
-  for (const n of defaultOrder()) if (!seen.has(n)) out.push(n);
-  return out;
+  return out.length ? out : defaultOrder();
 }
 const lettersToOrder = (s) => [...String(s || "")].map((c) => c.charCodeAt(0) - 65);
 const orderToLetters = (o) => o.map((n) => String.fromCharCode(65 + n)).join("");
@@ -166,8 +166,8 @@ async function setOrder(order) {
   }
   return { order };
 }
-// 받은 순서가 모든 모드를 한 번씩 담은 목록인지
-const isFullOrder = (o) => Array.isArray(o) && o.length === MODE_MAX + 1 && normOrder(o).every((n, i) => n === o[i]);
+// 받은 순서가 모드를 한 번씩만 담은 목록인지 (삭제한 모드는 빠져 있어도 됨, 최소 1개)
+const isValidOrder = (o) => Array.isArray(o) && o.length >= 1 && o.length === normOrder(o).length && normOrder(o).every((n, i) => n === o[i]);
 
 function statePayload(row, step) {
   const ms = (v) => (v ? new Date(v).getTime() : null);
@@ -479,7 +479,7 @@ async function handler(req, res) {
   }
   if (route === "POST /api/modeorder") {
     const b = await getJson(req);
-    if (!isFullOrder(b.order)) return send(res, 400, { error: "order", message: "모드 순서가 올바르지 않습니다." });
+    if (!isValidOrder(b.order)) return send(res, 400, { error: "order", message: "모드 순서가 올바르지 않습니다." });
     const r = await setOrder(b.order);
     if (r.error) return send(res, 503, { error: "order", message: `모드 순서를 저장하지 못했습니다: ${r.error}` });
     return send(res, 200, r);
