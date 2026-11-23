@@ -7,6 +7,9 @@
 <meta name="theme-color" content="#0E0F10">
 <title>RX</title>
 <style>
+/* nothing on this page can be selected, long-press copied or dragged (phones and desktop) */
+*,*::before,*::after{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+img,svg,image{-webkit-user-drag:none;user-drag:none}
 :root{
   --paper:#fff;
   --pp:rgba(246,247,245,.24);
@@ -216,6 +219,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 </style>
 </head>
 <body>
+  <script>
+    // no text selection, long-press menu or dragging anywhere on the page (backs up the CSS on older phones)
+    for (const ev of ["selectstart", "contextmenu", "dragstart"]) document.addEventListener(ev, (e) => e.preventDefault(), { capture: true });
+  </script>
   <div class="stage" role="img" aria-label="LaNA RX 보드">
     <div class="shadow"></div>
     <div class="rot" id="rot">
