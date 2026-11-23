@@ -658,8 +658,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
   // 11 (melody) / 12 (hold).
   // Web 12 (number + shape + 도레미파솔, hold to sustain) is 17 here; web 13 (built-in LEDs blink 5 times) is 15.
-  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 17, 13: 15, 14: 8, 15: 18 }; // web 14 = web 9 again (number + shape + note)
+  const INNER_MODE = { 8: 14, 9: 8, 10: 11, 11: 12, 12: 17, 13: 15, 14: 8, 15: 18, 16: 19, 17: 20, 18: 21 }; // web 14 = web 9 again (number + shape + note)
   // web 15 (음계만) is 18 here: the note name alone on the panel, the same short note as web 9 on press
+  // web 16 (도형+음계) is 19: shape / note name, short note on press (web 9 without the number)
+  // web 17 (도형+도레미파솔) is 20: shape / 도~솔, 도레미파솔 while held (web 12 without the number)
+  // web 18 (도레미파솔) is 21: 도~솔 alone, 도레미파솔 while held
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
@@ -676,6 +679,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (mode === 0) html = LOGO; // before the show: the logo, the same on every phone (no number needed)
     else if (mode === 17) html = number ? `<span class="oled-line"><span class="oled-n">${num}</span><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${DOREMI_OF[number]}</span></span>` : ""; // web 12: number / shape / C~G (도~솔)
     else if (mode === 18) html = number ? `<span class="oled-fit" data-ref="Bb">${NOTE_OF[number]}</span>` : ""; // web 15: the note alone (sized for the widest, Eb / Bb)
+    else if (mode === 19 || mode === 20) html = number ? `<span class="oled-line"><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${mode === 19 ? NOTE_OF[number] : DOREMI_OF[number]}</span></span>` : ""; // web 16 / 17: shape / note
+    else if (mode === 21) html = number ? `<span class="oled-fit" data-ref="D">${DOREMI_OF[number]}</span>` : ""; // web 18: 도~솔 alone
     else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // mode 6 (mute) and 14 (web 8, dingdong): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: shape alone (○ △ □ ☆ ✕) matched to melodies 1~5
@@ -684,7 +689,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const shape = (mode === 8 || mode === 12) ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
       html = `<span class="oled-line"><span class="oled-n">${num}</span>${shape}<span class="oled-note">${NOTE_OF[number]}</span></span>`;
     }
-    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); fitShape(); if (mode === 7 || mode === 8 || mode === 12 || mode === 17) fitStack(); }
+    if (html !== last) { oled.innerHTML = html; last = html; alignShape(); fitText(); fitShape(); if (mode === 7 || mode === 8 || mode === 12 || mode === 17 || mode === 19 || mode === 20) fitStack(); }
   }
 
   // Mode 9: the shape alone, its ink scaled to SHAPE_FILL of the panel and centred by the ink itself
@@ -774,9 +779,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const line = oled.querySelector(".oled-line");
     if (!line) return;
     const items = [...line.children];
-    const N = parseFloat(getComputedStyle(items[0]).fontSize);
+    const ref = line.querySelector(".oled-n") || line.querySelector(".oled-note") || items[0]; // no number (web 16/17): size by the note
+    const N = parseFloat(getComputedStyle(ref).fontSize);
     // number, shape and note all get the same ink height: the shape glyph is scaled to the digits' height
-    const H = (() => { const b = inkBox(items[0]); return b.bottom - b.top; })();
+    const H = (() => { const b = inkBox(ref); return b.bottom - b.top; })();
     const shape = line.querySelector(".oled-shape");
     if (shape) {
       shape.style.fontSize = "100px";
@@ -1290,8 +1296,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // preload this phone's chapter 3 audio as soon as the show reaches chapter 3, so the first press sounds at once
   setInterval(() => {
     const m = state ? state.mode : 1;
-    if (m === 17 && number) { notePlayer(doremiSrc(number)); loadBuf(doremiSrc(number)); return; } // web 12
-    if (m === 18 && number && NOTE_OF[number]) { notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`); return; } // web 15
+    if ((m === 17 || m === 20 || m === 21) && number) { notePlayer(doremiSrc(number)); loadBuf(doremiSrc(number)); return; } // web 12, 17, 18
+    if ((m === 18 || m === 19) && number && NOTE_OF[number]) { notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`); return; } // web 15
     if (m < 7 || m > 12 || !number || !NOTE_OF[number]) return;
     notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`);
     notePlayer(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
@@ -1380,7 +1386,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const mode = state ? state.mode : 1;
     // mode 6 is "everything off": no panel, no sound on press
     // mode 7: handled by rx-down / rx-up (hold to sustain for open numbers)
-    if ((mode === 8 || mode === 9 || mode === 18) && number) play(NOTE_OF[number]); // 8 & 9 (and web 15): short note (5 groups)
+    if ((mode === 8 || mode === 9 || mode === 18 || mode === 19) && number) play(NOTE_OF[number]); // 8 & 9 (and web 15): short note (5 groups)
     else if (mode === 10 && number) playLong(NOTE_OF[number]);            // 10: 2.5-second extended note (5 groups)
     else if (mode === 11 && number) playMelody(MELODY_OF[number]);        // 11: melody 1~5 (5 groups)
     // mode 12: handled by rx-down / rx-up (hold to sustain, 15s hold -> 10s fadeout)
@@ -1390,12 +1396,12 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   document.addEventListener("rx-down", () => {
     const mode = state ? state.mode : 1;
     if (mode === 7 && number && mode7Open(number)) startHold7(loopSrc(NOTE_OF[number]));
-    else if (mode === 17 && number) startHold7(doremiSrc(number)); // web 12: 도레미파솔 while held
+    else if ((mode === 17 || mode === 20 || mode === 21) && number) startHold7(doremiSrc(number)); // web 12, 17, 18: 도레미파솔 while held
     else if (mode === 12 && number) startHold12(NOTE_OF[number]);
   });
   document.addEventListener("rx-up", () => {
     const mode = state ? state.mode : 1;
-    if (mode === 7 || mode === 17) stopHold7(false);
+    if (mode === 7 || mode === 17 || mode === 20 || mode === 21) stopHold7(false);
     else if (mode === 12) stopHold12(false);
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });

@@ -179,7 +179,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
           <button type="button" class="run" id="run-toggle" aria-pressed="false" title="켜져 있는 동안 모드를 누르면 바로 전환">RUN</button>
           <div class="tabs" role="tablist" aria-label="모드 보기">
             <button type="button" role="tab" id="tab-cue" aria-controls="view-cue" aria-selected="true">순서</button>
-            <button type="button" role="tab" id="tab-abc" aria-controls="view-abc" aria-selected="false">A~P</button>
+            <button type="button" role="tab" id="tab-abc" aria-controls="view-abc" aria-selected="false">A~S</button>
           </div>
           </div>
         </div>
@@ -202,7 +202,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 
         <!-- A~O: every mode in letter order -->
         <div class="view" id="view-abc" role="tabpanel" aria-labelledby="tab-abc" hidden>
-          <ul class="modes" id="modes" aria-label="모드 A~P"></ul>
+          <ul class="modes" id="modes" aria-label="모드 A~S"></ul>
         </div>
       </section>
 
@@ -245,6 +245,9 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 13, d: "내장 LED 0.2초 간격으로 5번 깜빡" },
     { n: 14, d: "개인번호+도형(○ △ □ ☆ ✕)+음계 → 터디" },
     { n: 15, d: "음계만 (음 이름 + 누르면 단음)" },
+    { n: 16, d: "도형+음계 (번호 없이, 누르면 단음)" },
+    { n: 17, d: "도형+도레미파솔 (번호 없이)" },
+    { n: 18, d: "도레미파솔 (도~솔 이름만)" },
   ];
   // modes are shown as letters A~O (0 = A … 14 = O); the server, boards and TouchDesigner keep the numbers 0~14
   const L = (n) => String.fromCharCode(65 + n);
