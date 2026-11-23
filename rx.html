@@ -1188,11 +1188,38 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // never plays again after the first pass.
   const loopSrc = (note) => `/assets/rx/mode12-loop-${note}.mp3`;
   const doremiSrc = (n) => `/assets/rx/mode12-doremi-${DOREMI_OF[n]}.mp3`;
-  const setLoop = (node, b, src) => {
-    const dor = src.includes("-doremi-");
-    node.loopStart = dor ? 0.5 : 0;
-    node.loopEnd = dor ? Math.min(3.5, b.duration) : b.duration;
-  };
+  // The recorded notes (mode12-loop-*) used to loop whole, but the jump from the file's end back to its start is
+  // not seamless (the waveform doesn't match, and iPhones add a few ms of MP3 padding there), so a held note went
+  // "띠~~~ 띠". So each one gets its own loop copy: it loops from ~0.25-0.4 s (the point whose lead-in best
+  // matches the end, so the two line up in phase) to 0.25 s before the end, and the last 0.15 s before the loop end
+  // is cross-faded (linear: the two are in phase) into the 0.15 s just before the loop start. At the jump the sound
+  // is then already what comes right before the start: no click, no new attack, level steady within ~0.5 dB.
+  const XF = 0.15, LOOP_IN = 0.3, LOOP_OUT = 0.25;
+  const looped = new WeakMap();
+  function loopBuf(b, src) {
+    if (src.includes("-doremi-") || !actx || b.duration < LOOP_IN + LOOP_OUT + 1) return { buf: b, start: src.includes("-doremi-") ? 0.5 : 0, end: src.includes("-doremi-") ? Math.min(3.5, b.duration) : b.duration };
+    if (looped.has(b)) return looped.get(b);
+    const sr = b.sampleRate, e0 = b.length - Math.floor(LOOP_OUT * sr), F = Math.floor(XF * sr);
+    const d0 = b.getChannelData(0), tail = d0.subarray(e0 - F, e0);
+    let s0 = Math.floor(LOOP_IN * sr), bestC = -Infinity;
+    for (let s = Math.floor(0.25 * sr); s <= Math.floor(0.4 * sr); s++) {
+      let c = 0;
+      for (let k = 0; k < F; k += 4) c += tail[k] * d0[s - F + k];
+      if (c > bestC) { bestC = c; s0 = s; }
+    }
+    const out = actx.createBuffer(b.numberOfChannels, e0, sr);
+    for (let c = 0; c < b.numberOfChannels; c++) {
+      const d = b.getChannelData(c), o = out.getChannelData(c);
+      o.set(d.subarray(0, e0));
+      for (let k = 0; k < F; k++) {
+        const a = (k + 1) / F; // 0 -> 1 across the fade
+        o[e0 - F + k] = d[e0 - F + k] * (1 - a) + d[s0 - F + k] * a;
+      }
+    }
+    const r = { buf: out, start: s0 / sr, end: e0 / sr };
+    looped.set(b, r);
+    return r;
+  }
   // Mode 7: hold to sustain continuously for opened numbers; stops when released or number closes
   let holdVoice7 = null; // { node, gain, startedAt, audio }
   function stopHold7(immediate) {
@@ -1227,9 +1254,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const node = actx.createBufferSource();
       const gain = actx.createGain();
       const t = actx.currentTime;
-      node.buffer = b;
+      const lp = loopBuf(b, src);
+      node.buffer = lp.buf;
       node.loop = true;
-      setLoop(node, b, src);
+      node.loopStart = lp.start;
+      node.loopEnd = lp.end;
       const level = src.includes("-doremi-") ? DOREMI_GAIN : 1;
       gain.gain.setValueAtTime(level, t);
       node.connect(gain).connect(actx.destination);
@@ -1286,9 +1315,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const t = actx.currentTime;
       const holdTime = t + Math.max(0, fade12Start() - now) / 1000;
       const endTime = t + Math.max(0, fade12End() - now) / 1000;
-      node.buffer = b;
+      const lp = loopBuf(b, src);
+      node.buffer = lp.buf;
       node.loop = true;
-      setLoop(node, b, src);
+      node.loopStart = lp.start;
+      node.loopEnd = lp.end;
       gain.gain.setValueAtTime(k, t);
       if (holdTime > t) gain.gain.setValueAtTime(k, holdTime);
       gain.gain.linearRampToValueAtTime(0, endTime);
@@ -1326,6 +1357,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // preload this phone's chapter 3 audio as soon as the show reaches chapter 3, so the first press sounds at once
   setInterval(() => {
     const m = state ? state.mode : 1;
+    if ((m === 7 || m === 12 || m === 18) && number && NOTE_OF[number]) { const ls = loopSrc(NOTE_OF[number]); if (ready[ls] && actx) loopBuf(ready[ls], ls); }
     if ((m === 17 || m === 20 || m === 21) && number) { notePlayer(doremiSrc(number)); loadBuf(doremiSrc(number)); return; } // web 12, 17, 18
     if (m === 18 && number && NOTE_OF[number]) { notePlayer(loopSrc(NOTE_OF[number])); loadBuf(loopSrc(NOTE_OF[number])); return; } // web 15: held note
     if (m === 19 && number && NOTE_OF[number]) { notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`); return; } // web 16
