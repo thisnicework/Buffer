@@ -671,12 +671,12 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
   // 11 (melody) / 12 (hold).
   // Web 12 (number + shape + 도레미파솔, hold to sustain) is 17 here; web 13 (built-in LEDs blink 5 times) is 15.
-  const INNER_MODE = { 8: 14, 9: 19, 10: 11, 11: 12, 12: 21, 13: 15, 14: 8, 15: 18, 16: 19, 17: 20, 18: 21 }; // web 14 = web 9 again (number + shape + note)
+  const INNER_MODE = { 8: 14, 9: 19, 10: 11, 11: 12, 12: 20, 13: 15, 14: 8, 15: 18, 16: 19, 17: 20, 18: 21 }; // web 14 = web 9 again (number + shape + note)
   // web 15 (음계만) is 18 here: the note name alone on the panel, the same short note as web 9 on press
   // web 16 (도형+음계) is 19: shape / note name, short note on press. Web 9 (J) uses it too now (no number);
   // web 14 (O, → 터디) keeps 8 (number + shape + note)
   // web 17 (도형+도레미파솔) is 20: shape / 도~솔, 도레미파솔 while held (web 12 without the number)
-  // web 18 (도레미파솔) is 21: 도~솔 alone, 도레미파솔 while held. Web 12 (M) uses it too now (no shape)
+  // web 18 (도레미파솔) is 21: 도~솔 alone, 도레미파솔 while held. Web 12 (M) uses 20 (shape / 도~솔, no number)
   const inner = (s) => (s && INNER_MODE[s.mode] ? { ...s, mode: INNER_MODE[s.mode] } : s);
 
   // mode 0 logo with its dot pattern: white on transparent, 2000x1418; the ink (dots included) spans x 256..1626, y 337..1168.
