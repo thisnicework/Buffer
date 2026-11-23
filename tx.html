@@ -46,8 +46,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .now-label{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
 .now-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .now-mode{font-size:44px;font-weight:700;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
-.now-timer{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
-.now-timer small{font-size:13px;font-weight:400;color:var(--mute);margin-left:4px}
 .now-desc{margin:4px 0 0;color:var(--ink)}
 
 .next{
@@ -144,7 +142,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <span class="now-label">지금 송출 중</span>
         <div class="now-row">
           <span class="now-mode" id="now-mode">–</span>
-          <span class="now-timer" id="now-timer" hidden></span>
         </div>
         <p class="now-desc" id="now-desc"></p>
       </section>
@@ -221,8 +218,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 0, d: "버퍼 로고" },
     { n: 1, d: "개인번호 (웹 02~90 짝수)" },
     { n: 2, d: "공연 안내 멘트" },
-    { n: 3, d: "700초 카운트다운" },
-    { n: 4, d: "카운트다운 유지+인물 발화 1" },
+    { n: 3, d: "개인번호" },
+    { n: 4, d: "개인번호+인물 발화 1" },
     { n: 5, d: "개인번호+인물 발화 2" },
     { n: 6, d: "디바이스 모든 기능 MUTE" },
     { n: 7, d: "17/32/11/10/31번/전체 버튼 ON" },
@@ -393,7 +390,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     $("next").disabled = !next || busy;
     $("next").textContent = next ? `다음 모드 → ${L(next.n)}` : "마지막 모드입니다";
     renderStep7();
-    tick();
   }
 
   // mode 7: each number (and "전체" = everyone) is switched on / off on its own; stored as bits 0~5
@@ -426,17 +422,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     if (!b || !state || busy) return;
     setOpen7((state.open7 || 0) ^ (1 << +b.dataset.bit)); // flip just this one
   });
-
-  // remaining seconds, computed from the start time on the server's clock
-  function tick() {
-    const el = $("now-timer");
-    const on = state && (state.mode === 3 || state.mode === 4) && state.timerStartedAtMs;
-    el.hidden = !on;
-    if (!on) return;
-    const left = Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
-    el.innerHTML = `${left}<small>초 남음</small>`;
-  }
-  setInterval(tick, 250);
 
   async function setMode(n) {
     busy = true; render();

@@ -667,7 +667,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // Turned 90° left and scaled up (same proportions) to fill the lit area (not the grey strip); only the
   // sparse outer dots are cropped (text spans x 465..1540, y 615..800 of the image).
   const LOGO = `<svg class="oled-logo" viewBox="398 -1560 617 1120" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418" transform="rotate(-90)"/></svg>`;
-  const remaining = () => Math.max(0, Math.ceil(state.timerSeconds - (Date.now() + offset - state.timerStartedAtMs) / 1000));
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
     // single-line modes fill the panel edge to edge (see fitText); no number yet: the panel stays dark
@@ -678,7 +677,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // mode 6 (mute) and 14 (web 8, dingdong): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: shape alone (○ △ □ ☆ ✕) matched to melodies 1~5
-    else if ((mode === 3 || mode === 4) && state.timerStartedAtMs) html = `<span class="oled-fit" data-ref="888">${remaining()}</span>`; // sized for the widest 3 digits so it doesn't jump each second
     else if ((mode === 7 || mode === 8 || mode === 12) && number) {
       // chapter 3, stacked and centred: number / shape (mode 8 and 12 only) / note name
       const shape = (mode === 8 || mode === 12) ? `<span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span>` : "";
