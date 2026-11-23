@@ -894,7 +894,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // on the spot (no round trip to /api/state). An older row (no open7 column) only wakes the phone up to ask.
   function onPush(payload) {
     const n = payload && payload.new;
-    if (n && "open7" in n && typeof n.mode === "number" && raw) {
+    // 8 is also what the database holds for P~S (15~18) until supabase-mode-15.sql has run: ask the server for the
+    // real mode instead of flashing the dingdong screen first
+    if (n && "open7" in n && typeof n.mode === "number" && n.mode !== 8 && raw) {
       lastPush = Date.now();
       const ms = (v) => (v ? new Date(v).getTime() : null);
       raw = { ...raw, mode: n.mode, timerStartedAtMs: ms(n.timer_started_at), updatedAtMs: ms(n.updated_at), open7: n.open7 };
