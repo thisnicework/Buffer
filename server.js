@@ -378,7 +378,7 @@ function warnClaimsOnce(msg) {
 
 // 모드는 0~13 (0 = 공연 전 BUFFER 로고). Supabase show_state.mode 에는 오래된 제약(1~9)이 남아 있을 수 있어, 실제 모드 번호는
 // reservations 의 표시용 행(show_id MODE, seat = 모드)에 두고 show_state 에는 타이머 규칙이 같은 1~8 값을 쓴다.
-const MODE_MAX = 14;
+const MODE_MAX = 15; // 15 (P) = 음계만: the note name alone, a short note on press
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function dbGetModeRow() {
   try {
@@ -578,19 +578,37 @@ function normOrder(list) {
 }
 const lettersToOrder = (s) => [...String(s || "")].map((c) => c.charCodeAt(0) - 65);
 const orderToLetters = (o) => o.map((n) => String.fromCharCode(65 + n)).join("");
+// 큐 줄마다 /tx에서 바꾼 이름(없으면 null = 모드 기본 설명). name 칸에 "ABJ…|[\"이름\",null,…]" 로 함께 둔다
+const LABEL_MAX = 40;
+const cleanLabel = (v) => (typeof v === "string" && v.trim() ? v.trim().slice(0, LABEL_MAX) : null);
+function cueLabels(order, labels) {
+  const l = Array.isArray(labels) ? labels : [];
+  return order.map((_, i) => cleanLabel(l[i]));
+}
+function parseCue(name) {
+  const s = String(name || ""), cut = s.indexOf("|");
+  const order = normOrder(lettersToOrder(cut < 0 ? s : s.slice(0, cut)));
+  let labels = [];
+  if (cut >= 0) { try { labels = JSON.parse(s.slice(cut + 1)); } catch (_) {} }
+  return { order, labels: cueLabels(order, labels) };
+}
+const cueName = (order, labels) => orderToLetters(order) + (labels.some(Boolean) ? "|" + JSON.stringify(labels) : "");
+// 받은 이름 목록이 올바른지: 없거나, 줄 수 이하의 글자/빈칸 목록
+const isValidLabels = (l) => l == null || (Array.isArray(l) && l.every((v) => v == null || (typeof v === "string" && v.length <= 200)));
 async function dbGetOrder() {
   if (supabase && !STATE_LOCAL) {
     try {
       const { data, error } = await supabase.from("reservations").select("name").eq("code", ORDER_ROW.code).maybeSingle();
-      if (!error) return normOrder(data ? lettersToOrder(data.name) : null);
+      if (!error) return parseCue(data ? data.name : "");
     } catch (_) {}
   }
-  return normOrder(orderLocal);
+  return orderLocal || parseCue("");
 }
-async function dbSetOrder(order) {
+async function dbSetOrder(order, rawLabels) {
+  const labels = cueLabels(order, rawLabels);
   if (supabase && !STATE_LOCAL) {
     try {
-      const name = orderToLetters(order);
+      const name = cueName(order, labels);
       const { data, error } = await supabase.from("reservations").update({ name }).eq("code", ORDER_ROW.code).select("id");
       if (error) return { error: error.message };
       if (!data || !data.length) {
@@ -599,8 +617,8 @@ async function dbSetOrder(order) {
       }
     } catch (e) { return { error: e.message }; }
   }
-  orderLocal = order;
-  return { order };
+  orderLocal = { order, labels };
+  return { order, labels };
 }
 // 받은 순서가 올바른 모드만 담은 목록인지 (빠진 모드·같은 모드 여러 번 가능, 1~99개)
 const isValidOrder = (o) => Array.isArray(o) && o.length >= 1 && o.length === normOrder(o).length && normOrder(o).every((n, i) => n === o[i]);
@@ -816,12 +834,12 @@ async function api(req, res, url) {
   }
 
   if (route === "GET /api/modeorder") {
-    return send(res, 200, { order: await dbGetOrder() });
+    return send(res, 200, await dbGetOrder());
   }
   if (route === "POST /api/modeorder") {
     const b = await readJson(req);
-    if (!isValidOrder(b.order)) return send(res, 400, { error: "order", message: "모드 순서가 올바르지 않습니다." });
-    const r = await dbSetOrder(b.order);
+    if (!isValidOrder(b.order) || !isValidLabels(b.labels)) return send(res, 400, { error: "order", message: "모드 순서가 올바르지 않습니다." });
+    const r = await dbSetOrder(b.order, b.labels);
     if (r.error) return send(res, 503, { error: "order", message: `모드 순서를 저장하지 못했습니다: ${r.error}` });
     return send(res, 200, r);
   }

@@ -98,6 +98,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .cue .del:hover{color:#C53030}
 .cue .dup:hover{color:var(--ink)}
 .cue li:has(.mode[aria-current="true"]) :is(.del,.dup){background:var(--ink);color:#B9BDC1}
+.cue .rename{flex:1;min-width:0;margin:6px 4px 6px 10px;padding:8px 10px;border:1px solid var(--ink);border-radius:8px;background:var(--paper);font-size:14px}
+.cue .d.renamed{font-weight:700}
 .removed{display:flex;flex-direction:column;gap:8px}
 .removed-list{display:flex;flex-wrap:wrap;gap:8px}
 .removed-list button{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px dashed var(--mute);border-radius:10px;background:var(--paper);font-size:13px;cursor:pointer}
@@ -177,7 +179,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
           <button type="button" class="run" id="run-toggle" aria-pressed="false" title="켜져 있는 동안 모드를 누르면 바로 전환">RUN</button>
           <div class="tabs" role="tablist" aria-label="모드 보기">
             <button type="button" role="tab" id="tab-cue" aria-controls="view-cue" aria-selected="true">순서</button>
-            <button type="button" role="tab" id="tab-abc" aria-controls="view-abc" aria-selected="false">A~O</button>
+            <button type="button" role="tab" id="tab-abc" aria-controls="view-abc" aria-selected="false">A~P</button>
           </div>
           </div>
         </div>
@@ -200,7 +202,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 
         <!-- A~O: every mode in letter order -->
         <div class="view" id="view-abc" role="tabpanel" aria-labelledby="tab-abc" hidden>
-          <ul class="modes" id="modes" aria-label="모드 A~O"></ul>
+          <ul class="modes" id="modes" aria-label="모드 A~P"></ul>
         </div>
       </section>
 
@@ -242,6 +244,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 12, d: "개인번호+도형+도레미파솔" },
     { n: 13, d: "내장 LED 0.2초 간격으로 5번 깜빡" },
     { n: 14, d: "개인번호+도형(○ △ □ ☆ ✕)+음계 → 터디" },
+    { n: 15, d: "음계만 (음 이름 + 누르면 단음)" },
   ];
   // modes are shown as letters A~O (0 = A … 14 = O); the server, boards and TouchDesigner keep the numbers 0~14
   const L = (n) => String.fromCharCode(65 + n);
@@ -280,9 +283,12 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   // order = what the server holds (last confirmed), the list on screen may differ until "순서 저장".
   const cue = $("cue");
   let order = MODES.map((m) => m.n); // A, B, C … until the server's chart arrives
-  let serverKnown = false, saving = false;
+  let labels = order.map(() => null);  // a name per row, renamed on this page (null = the mode's own description)
+  let serverKnown = false, saving = false, editing = false;
   const draft = () => [...cue.children].map((li) => +li.dataset.n);
-  const dirty = () => draft().join() !== order.join();
+  const draftLabels = () => [...cue.children].map((li) => li.dataset.label || null);
+  const same = (o1, l1, o2, l2) => JSON.stringify([o1, l1]) === JSON.stringify([o2, l2]);
+  const dirty = () => !same(draft(), draftLabels(), order, labels);
   const hhmmss = () => { const d = new Date(), p = (v) => String(v).padStart(2, "0"); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
   function setSaveState(s, text) {
     $("cue-state").dataset.s = s;
@@ -297,15 +303,23 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     else if (d) setSaveState("dirty", "저장 안 됨 · 바꾼 순서가 아직 서버에 없어요");
     else if (okText) setSaveState("ok", okText);
   }
-  function cueRow(m) {
+  function cueRow(m, label) {
     const li = document.createElement("li");
     li.dataset.n = m.n;
+    li.dataset.label = label || "";
     li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="pos"></span><span class="n">${L(m.n)}</span><span class="d">${m.d}</span><span class="now-tag" hidden>지금</span></button><button type="button" class="dup" aria-label="${L(m.n)} 복제" title="바로 아래에 복제">⧉</button><button type="button" class="del" aria-label="${L(m.n)} 순서에서 삭제" title="순서에서 삭제">✕</button><span class="grip" aria-hidden="true">≡</span>`;
+    showLabel(li);
     return li;
   }
-  function renderCue(seq) {
+  function showLabel(li) {
+    const d = li.querySelector(".d");
+    d.textContent = li.dataset.label || byN(+li.dataset.n).d;
+    d.classList.toggle("renamed", !!li.dataset.label);
+    d.title = "더블클릭해서 이름 바꾸기 (RUN 꺼져 있을 때)";
+  }
+  function renderCue(seq, labs) {
     cue.innerHTML = "";
-    for (const n of seq) { const m = byN(n); if (m) cue.appendChild(cueRow(m)); }
+    seq.forEach((n, i) => { const m = byN(n); if (m) cue.appendChild(cueRow(m, labs && labs[i])); });
     renumber();
     render();
   }
@@ -324,7 +338,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const b = e.target.closest(".del, .dup");
     if (!b || b.disabled || saving) return;
     const li = b.closest("li");
-    if (b.classList.contains("dup")) li.after(cueRow(byN(+li.dataset.n)));
+    if (b.classList.contains("dup")) li.after(cueRow(byN(+li.dataset.n), li.dataset.label));
     else li.remove();
     renumber(); render(); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
   });
@@ -335,34 +349,36 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     renumber(); render(); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
   });
   async function loadOrder() {
-    if (saving || drag) return;
+    if (saving || drag || editing) return;
     try {
       const r = await fetch("/api/modeorder", { cache: "no-store" });
       const j = await r.json();
       if (!r.ok || !Array.isArray(j.order)) throw new Error();
-      const changed = j.order.join() !== order.join();
+      const jl = Array.isArray(j.labels) ? j.labels : j.order.map(() => null);
+      const changed = !same(j.order, jl, order, labels);
       const wasDirty = serverKnown && dirty();
-      order = j.order;
+      order = j.order; labels = jl;
       serverKnown = true;
-      if (!wasDirty && (changed || !cue.children.length)) renderCue(order); // never overwrite unsaved changes
+      if (!wasDirty && (changed || !cue.children.length)) renderCue(order, labels); // never overwrite unsaved changes
       refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
     } catch (_) {
       setSaveState("err", "서버 연결 안 됨 · 저장 상태를 확인할 수 없어요");
     }
   }
-  $("order-revert").addEventListener("click", () => { renderCue(order); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`); });
-  $("order-save").addEventListener("click", async () => {
-    const want = draft();
-    if (!want.length) return;
+  $("order-revert").addEventListener("click", () => { renderCue(order, labels); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`); });
+  $("order-save").addEventListener("click", () => saveCue());
+  async function saveCue() {
+    const want = draft(), wantL = draftLabels();
+    if (!want.length || saving) return;
     saving = true; refreshSaveUi();
     try {
-      const r = await fetch("/api/modeorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: want }) });
+      const r = await fetch("/api/modeorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: want, labels: wantL }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || "서버 응답 " + r.status);
-      // read it back so "저장됨" means the server really holds this order
+      // read it back so "저장됨" means the server really holds this order (and these names)
       const back = await (await fetch("/api/modeorder", { cache: "no-store" })).json();
-      if (!Array.isArray(back.order) || back.order.join() !== want.join()) throw new Error("서버에 다른 순서가 남아 있어요");
-      order = back.order;
+      if (!Array.isArray(back.order) || !same(back.order, back.labels, want, wantL)) throw new Error("서버에 다른 순서가 남아 있어요");
+      order = back.order; labels = back.labels;
       saving = false;
       render();
       refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 저장 완료`);
@@ -371,7 +387,43 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       refreshSaveUi();
       setSaveState("err", "저장 실패 · " + (e.message || "서버에 연결할 수 없어요"));
     }
+  }
+
+  // rename a row: double-click (or double-tap) its name while RUN is off. Enter / leaving the box saves it to the
+  // server straight away (with the rest of the list as it is on screen); Esc cancels; an empty name goes back to
+  // the mode's own description.
+  let lastTap = { li: null, t: 0 };
+  cue.addEventListener("click", (e) => {
+    const d = e.target.closest(".d");
+    if (!d || runOn || saving || editing) return;
+    const li = d.closest("li"), now = Date.now();
+    if (lastTap.li === li && now - lastTap.t < 450) { lastTap = { li: null, t: 0 }; startRename(li); }
+    else lastTap = { li, t: now };
   });
+  function startRename(li) {
+    editing = true;
+    const btn = li.querySelector(".mode"), m = byN(+li.dataset.n);
+    const box = document.createElement("input");
+    box.className = "rename"; box.maxLength = 40; box.value = li.dataset.label || m.d;
+    box.setAttribute("aria-label", `${L(m.n)} 이름`);
+    btn.hidden = true;
+    btn.after(box);
+    box.focus(); box.select();
+    let done = false;
+    const finish = (keep) => {
+      if (done) return; done = true;
+      const v = box.value.trim();
+      if (keep) li.dataset.label = v && v !== m.d ? v : "";
+      box.remove(); btn.hidden = false; editing = false;
+      showLabel(li); render();
+      if (keep && dirty()) saveCue(); else refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
+    };
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); finish(true); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    });
+    box.addEventListener("blur", () => finish(true));
+  }
   // drag by the grip (touch or mouse); tapping the rest of the row runs that mode, like the A~O list
   let drag = null;
   cue.addEventListener("pointerdown", (e) => {
@@ -442,6 +494,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const rows = [...cue.children];
     const cur = !dirty() && cuePos >= 0 ? cuePos : rows.findIndex((li) => +li.dataset.n === state.mode);
     rows.forEach((li, i) => { li.querySelector(".mode").setAttribute("aria-current", String(i === cur)); li.querySelector(".now-tag").hidden = i !== cur; });
+    if (cur >= 0 && rows[cur].dataset.label) $("now-desc").textContent = rows[cur].dataset.label;
     $("next").disabled = !next || busy;
     $("next").textContent = next ? `다음 모드 → ${L(next.n)}` : "마지막 모드입니다";
     renderStep7();
