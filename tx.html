@@ -94,9 +94,10 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .cue .mode[aria-current="true"] .pos{color:#B9BDC1}
 .cue .mode[aria-current="true"] .now-tag{background:var(--paper);color:var(--ink)}
 .cue li:has(.mode[aria-current="true"]) .grip{background:var(--ink);color:#B9BDC1}
-.cue .del{width:44px;flex:none;border:0;background:transparent;color:var(--mute);font-size:16px;cursor:pointer}
+.cue .del,.cue .dup{width:40px;flex:none;border:0;background:transparent;color:var(--mute);font-size:16px;cursor:pointer}
 .cue .del:hover{color:#C53030}
-.cue li:has(.mode[aria-current="true"]) .del{background:var(--ink);color:#B9BDC1}
+.cue .dup:hover{color:var(--ink)}
+.cue li:has(.mode[aria-current="true"]) :is(.del,.dup){background:var(--ink);color:#B9BDC1}
 .removed{display:flex;flex-direction:column;gap:8px}
 .removed-list{display:flex;flex-wrap:wrap;gap:8px}
 .removed-list button{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px dashed var(--mute);border-radius:10px;background:var(--paper);font-size:13px;cursor:pointer}
@@ -299,7 +300,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   function cueRow(m) {
     const li = document.createElement("li");
     li.dataset.n = m.n;
-    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="pos"></span><span class="n">${L(m.n)}</span><span class="d">${m.d}</span><span class="now-tag" hidden>지금</span></button><button type="button" class="del" aria-label="${L(m.n)} 순서에서 삭제" title="순서에서 삭제">✕</button><span class="grip" aria-hidden="true">≡</span>`;
+    li.innerHTML = `<button type="button" class="mode" data-n="${m.n}"><span class="pos"></span><span class="n">${L(m.n)}</span><span class="d">${m.d}</span><span class="now-tag" hidden>지금</span></button><button type="button" class="dup" aria-label="${L(m.n)} 복제" title="바로 아래에 복제">⧉</button><button type="button" class="del" aria-label="${L(m.n)} 순서에서 삭제" title="순서에서 삭제">✕</button><span class="grip" aria-hidden="true">≡</span>`;
     return li;
   }
   function renderCue(seq) {
@@ -317,11 +318,14 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     for (const b of cue.querySelectorAll(".del")) b.disabled = saving || cue.children.length <= 1; // keep at least one
   }
   const renumber = () => { [...cue.children].forEach((li, i) => { li.querySelector(".pos").textContent = i + 1; }); renderRemoved(); };
-  // ✕ takes a mode out of the order, a removed one goes back at the end; both need 순서 저장 like a drag
+  // ✕ takes a row out of the order, ⧉ puts a copy of that mode right under it (the same mode can run more
+  // than once), a removed mode goes back at the end; all need 순서 저장 like a drag
   cue.addEventListener("click", (e) => {
-    const b = e.target.closest(".del");
+    const b = e.target.closest(".del, .dup");
     if (!b || b.disabled || saving) return;
-    b.closest("li").remove();
+    const li = b.closest("li");
+    if (b.classList.contains("dup")) li.after(cueRow(byN(+li.dataset.n)));
+    else li.remove();
     renumber(); render(); refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
   });
   $("removed-list").addEventListener("click", (e) => {
@@ -406,11 +410,23 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   $("tab-abc").addEventListener("click", () => showTab("abc"));
   try { showTab(localStorage.getItem("tx-mode-view") || "cue"); } catch (_) { showTab("cue"); }
 
-  // the mode after the current one in the saved cue order (null at the end)
+  // where the show is in the saved cue order. A mode can appear more than once, so the row is tracked here
+  // (and remembered on this screen); if the mode was changed elsewhere, the next row holding it is used.
+  let cuePos = -1;
+  try { cuePos = +(localStorage.getItem("tx-cue-pos") ?? -1); } catch (_) {}
+  function syncPos() {
+    if (busy) return; // a switch is on its way: keep the row it was sent from until the server answers
+    if (order[cuePos] !== state.mode) {
+      const ahead = order.indexOf(state.mode, Math.max(0, cuePos));
+      cuePos = ahead >= 0 ? ahead : order.indexOf(state.mode);
+    }
+    try { localStorage.setItem("tx-cue-pos", String(cuePos)); } catch (_) {}
+  }
+  // the row after the current one in the saved cue order (null at the end)
   const nextInOrder = () => {
-    const i = order.indexOf(state.mode);
-    if (i < 0) return byN(order[0]); // the current mode was deleted from the order: start from the top
-    return i + 1 < order.length ? byN(order[i + 1]) : null;
+    syncPos();
+    const i = cuePos < 0 ? 0 : cuePos + 1; // the current mode was deleted from the order: start from the top
+    return i < order.length ? { ...byN(order[i]), i } : null;
   };
   renderCue(order);
 
@@ -419,9 +435,13 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const m = byN(state.mode) || { d: "" };
     $("now-mode").textContent = "MODE " + L(state.mode);
     $("now-desc").textContent = m.d;
-    for (const b of document.querySelectorAll("#modes .mode, #cue .mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
-    for (const li of cue.children) li.querySelector(".now-tag").hidden = +li.dataset.n !== state.mode;
     const next = nextInOrder();
+    for (const b of list.querySelectorAll(".mode")) b.setAttribute("aria-current", String(+b.dataset.n === state.mode));
+    // in the cue list only the current row is marked (a duplicated mode has other rows); while the list has
+    // unsaved changes the rows no longer match the saved order, so the first row with the mode is marked
+    const rows = [...cue.children];
+    const cur = !dirty() && cuePos >= 0 ? cuePos : rows.findIndex((li) => +li.dataset.n === state.mode);
+    rows.forEach((li, i) => { li.querySelector(".mode").setAttribute("aria-current", String(i === cur)); li.querySelector(".now-tag").hidden = i !== cur; });
     $("next").disabled = !next || busy;
     $("next").textContent = next ? `다음 모드 → ${L(next.n)}` : "마지막 모드입니다";
     renderStep7();
@@ -458,7 +478,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     setOpen7((state.open7 || 0) ^ (1 << +b.dataset.bit)); // flip just this one
   });
 
-  async function setMode(n) {
+  async function setMode(n, prevPos) {
     busy = true; render();
     $("err").textContent = "";
     try {
@@ -466,6 +486,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       setStatus(true, "연결됨");
     } catch (e) {
       $("err").textContent = e.message;
+      if (prevPos !== undefined) cuePos = prevPos; // didn't switch: the cue stays where it was
     } finally {
       busy = false; render();
     }
@@ -481,7 +502,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     }
   }
 
-  $("next").addEventListener("click", () => { const n = state && nextInOrder(); if (n) setMode(n.n); }); // follows the cue order
+  $("next").addEventListener("click", () => { const n = state && nextInOrder(); if (n) { const prev = cuePos; cuePos = n.i; setMode(n.n, prev); } }); // follows the cue order
 
   // RUN: off = tapping a row does nothing (safe to look around / drag); on = a tap switches the show at once.
   // Always starts off when the page opens.
@@ -493,8 +514,11 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   });
   const runTap = (e) => { // a tap on a row in either view
     const b = e.target.closest(".mode");
-    if (!runOn || !b || !state || busy || +b.dataset.n === state.mode) return;
-    setMode(+b.dataset.n);
+    if (!runOn || !b || !state || busy) return;
+    const li = cue.contains(b) ? b.closest("li") : null, prev = cuePos;
+    if (li && !dirty()) cuePos = [...cue.children].indexOf(li); // the cue continues from the row that was tapped
+    if (+b.dataset.n === state.mode) { render(); return; } // same mode (e.g. its copy further down): just move the marker
+    setMode(+b.dataset.n, prev);
   };
   list.addEventListener("click", runTap);
   cue.addEventListener("click", runTap);

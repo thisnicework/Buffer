@@ -138,13 +138,13 @@ async function setPickMode(on) {
 const ORDER_ROW = { show_id: "ORDER", seat: 0, code: "MODE-ORDER", phone: "mode-order" };
 let memOrder = null;
 const defaultOrder = () => Array.from({ length: MODE_MAX + 1 }, (_, i) => i);
-// 저장된 순서를 정리: 없는/중복 모드는 뺀다. /tx에서 삭제한 모드는 순서에 없는 채로 둔다
+// 저장된 순서를 정리: 없는 모드는 뺀다. /tx에서 삭제한 모드는 순서에 없는 채로, 복제한 모드는 여러 번 들어간 채로 둔다
 // (저장된 순서가 아예 없거나 비었으면 A~O 전체)
+const ORDER_MAX = 99;
 function normOrder(list) {
-  const seen = new Set();
   const out = [];
   for (const n of Array.isArray(list) ? list : []) {
-    if (Number.isInteger(n) && n >= 0 && n <= MODE_MAX && !seen.has(n)) { seen.add(n); out.push(n); }
+    if (Number.isInteger(n) && n >= 0 && n <= MODE_MAX && out.length < ORDER_MAX) out.push(n);
   }
   return out.length ? out : defaultOrder();
 }
@@ -166,7 +166,7 @@ async function setOrder(order) {
   }
   return { order };
 }
-// 받은 순서가 모드를 한 번씩만 담은 목록인지 (삭제한 모드는 빠져 있어도 됨, 최소 1개)
+// 받은 순서가 올바른 모드만 담은 목록인지 (빠진 모드·같은 모드 여러 번 가능, 1~99개)
 const isValidOrder = (o) => Array.isArray(o) && o.length >= 1 && o.length === normOrder(o).length && normOrder(o).every((n, i) => n === o[i]);
 
 function statePayload(row, step) {
