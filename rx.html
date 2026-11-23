@@ -1322,7 +1322,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   setInterval(() => {
     const m = state ? state.mode : 1;
     if ((m === 17 || m === 20 || m === 21) && number) { notePlayer(doremiSrc(number)); loadBuf(doremiSrc(number)); return; } // web 12, 17, 18
-    if ((m === 18 || m === 19) && number && NOTE_OF[number]) { notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`); return; } // web 15
+    if (m === 18 && number && NOTE_OF[number]) { notePlayer(loopSrc(NOTE_OF[number])); loadBuf(loopSrc(NOTE_OF[number])); return; } // web 15: held note
+    if (m === 19 && number && NOTE_OF[number]) { notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`); return; } // web 16
     if (m < 7 || m > 12 || !number || !NOTE_OF[number]) return;
     notePlayer(`/assets/rx/mode67-note-${NOTE_OF[number]}.mp3`);
     notePlayer(`/assets/rx/mode12-loop-${NOTE_OF[number]}.mp3`);
@@ -1411,7 +1412,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const mode = state ? state.mode : 1;
     // mode 6 is "everything off": no panel, no sound on press
     // mode 7: handled by rx-down / rx-up (hold to sustain for open numbers)
-    if ((mode === 8 || mode === 9 || mode === 18 || mode === 19) && number) play(NOTE_OF[number]); // 8 & 9 (and web 15): short note (5 groups)
+    if ((mode === 8 || mode === 9 || mode === 19) && number) play(NOTE_OF[number]); // 8 & 9 (and web 16): short note (5 groups)
     else if (mode === 10 && number) playLong(NOTE_OF[number]);            // 10: 2.5-second extended note (5 groups)
     else if (mode === 11 && number) playMelody(MELODY_OF[number]);        // 11: melody 1~5 (5 groups)
     // mode 12: handled by rx-down / rx-up (hold to sustain, 15s hold -> 10s fadeout)
@@ -1421,12 +1422,13 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   document.addEventListener("rx-down", () => {
     const mode = state ? state.mode : 1;
     if (mode === 7 && number && mode7Open(number)) startHold7(loopSrc(NOTE_OF[number]));
+    else if (mode === 18 && number) startHold7(loopSrc(NOTE_OF[number])); // web 15 (P 단음): the note sounds only while held, short or long
     else if ((mode === 17 || mode === 20 || mode === 21) && number) startHold7(doremiSrc(number)); // web 12, 17, 18: 도레미파솔 while held
     else if (mode === 12 && number) startHold12(NOTE_OF[number]);
   });
   document.addEventListener("rx-up", () => {
     const mode = state ? state.mode : 1;
-    if (mode === 7 || mode === 17 || mode === 20 || mode === 21) stopHold7(false);
+    if (mode === 7 || mode === 17 || mode === 18 || mode === 20 || mode === 21) stopHold7(false);
     else if (mode === 12) stopHold12(false);
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });
