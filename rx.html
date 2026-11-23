@@ -1209,13 +1209,15 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const t = actx.currentTime;
       if (immediate) { v.node.stop(t); return; }
       v.gain.gain.cancelScheduledValues(t);
-      v.gain.gain.setValueAtTime(1, t);
+      v.gain.gain.setValueAtTime(v.level || 1, t);
       v.gain.gain.linearRampToValueAtTime(0, t + 0.08); // smooth natural 80ms release on release
       v.node.stop(t + 0.09);
     } catch (_) {}
   }
 
-  // also web 12 (도레미파솔): same hold-to-sustain at full volume, given the doremi file as src
+  // also web 12 (도레미파솔): same hold-to-sustain, given the doremi file as src. The doremi tones are a plain,
+  // steady low tone that sounds quieter on phone speakers than the recorded notes, so they play +6 dB (×2).
+  const DOREMI_GAIN = 2;
   function startHold7(src) {
     stopHold7(true);
     if (sounding(nowNote)) nowNote.pause();
@@ -1228,10 +1230,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       node.buffer = b;
       node.loop = true;
       setLoop(node, b, src);
-      gain.gain.setValueAtTime(1, t);
+      const level = src.includes("-doremi-") ? DOREMI_GAIN : 1;
+      gain.gain.setValueAtTime(level, t);
       node.connect(gain).connect(actx.destination);
       node.start(t, 0);
-      holdVoice7 = { node, gain, startedAt: t };
+      holdVoice7 = { node, gain, startedAt: t, level };
       return;
     }
     loadBuf(src);
