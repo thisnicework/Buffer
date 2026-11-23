@@ -1166,8 +1166,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     try {
       // iPhones: let Web Audio play even with the ringer switch on silent, like the <audio> sounds do
       if (navigator.audioSession && navigator.audioSession.type !== "playback") navigator.audioSession.type = "playback";
+      if (actx && actx.state === "closed") actx = null; // iOS can close it after a long time in the background
       if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (C) actx = new C(); }
-      if (actx && actx.state === "suspended") actx.resume().catch(() => {});
+      // iPhones also use "interrupted" (screen off, idle, a call), not only "suspended": wake it from either
+      if (actx && actx.state !== "running") actx.resume().catch(() => {});
     } catch (_) {}
   };
   for (const ev of ["pointerdown", "touchend", "click"]) addEventListener(ev, wakeAudio, true); // only a tap may start it
