@@ -685,6 +685,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // Turned 90° left and scaled up (same proportions) to fill the lit area (not the grey strip); only the
   // sparse outer dots are cropped (text spans x 465..1540, y 615..800 of the image).
   const LOGO = `<svg class="oled-logo" viewBox="398 -1560 617 1120" role="img" aria-label="BUFFER 버퍼"><image href="/assets/rx/mode0-logo.webp" width="2000" height="1418" transform="rotate(-90)"/></svg>`;
+  const NOTE_K = 0.7; // P (단음) and S (도레미파솔): the letter at 70 % of the panel-filling size
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
     // single-line modes fill the panel edge to edge (see fitText); no number yet: the panel stays dark
@@ -692,9 +693,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
     if (mode === 0) html = LOGO; // before the show: the logo, the same on every phone (no number needed)
     else if (mode === 17) html = number ? `<span class="oled-line"><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${DOREMI_OF[number]}</span></span>` : ""; // web 12 (M): shape / C~G (도~솔), no number
-    else if (mode === 18) html = number ? `<span class="oled-fit" data-ref="D">${NOTE_OF[number]}</span>` : ""; // web 15: the note alone, big like one letter (Eb / Bb shrink to fit)
+    else if (mode === 18) html = number ? `<span class="oled-fit" data-ref="D" data-k="${NOTE_K}">${NOTE_OF[number]}</span>` : ""; // web 15: the note alone, big like one letter (Eb / Bb shrink to fit)
     else if (mode === 19 || mode === 20) html = number ? `<span class="oled-line"><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${mode === 19 ? NOTE_OF[number] : DOREMI_OF[number]}</span></span>` : ""; // web 16 / 17: shape / note
-    else if (mode === 21) html = number ? `<span class="oled-fit" data-ref="D">${DOREMI_OF[number]}</span>` : ""; // web 18: 도~솔 alone, same size as web 15 (P)
+    else if (mode === 21) html = number ? `<span class="oled-fit" data-ref="D" data-k="${NOTE_K}">${DOREMI_OF[number]}</span>` : ""; // web 18: 도~솔 alone, same size as web 15 (P)
     else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // mode 6 (mute) and 14 (web 8, dingdong): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: shape alone (○ △ □ ☆ ✕) matched to melodies 1~5
@@ -776,7 +777,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const m = el.textContent.length;
     const curW = cur.actualBoundingBoxLeft + cur.actualBoundingBoxRight + ls * 100 * (m - 1);
     // a text wider than its reference (Eb / Bb in modes P and S, sized for one letter) shrinks just enough to fit
-    const size = Math.min(oled.offsetWidth * FILL / (m > n ? Math.max(refW, curW) : refW), oled.offsetHeight * 0.9 / refH) * 100;
+    const size = Math.min(oled.offsetWidth * FILL / (m > n ? Math.max(refW, curW) : refW), oled.offsetHeight * 0.9 / refH) * 100 * (+el.dataset.k || 1); // data-k: smaller than full
     el.style.fontSize = size.toFixed(2) + "px";
     // shift so the ink, not the advance box, is centred
     const k = size / 100;
