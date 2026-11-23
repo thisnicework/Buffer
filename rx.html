@@ -1309,7 +1309,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // stop mode 7 / 12 voices if leaving mode or closed, or adjust HTML5 audio fallback volume
   setInterval(() => {
     const m = state ? state.mode : 1;
-    if (m !== 17 && (m !== 7 || !number || !mode7Open(number)) && holdVoice7) stopHold7(true);
+    // every held-note mode keeps its voice (7 only while the number is open): 17 / 20 / 21 (도레미파솔), 18 (P 단음)
+    const holdMode = m === 17 || m === 18 || m === 20 || m === 21 || (m === 7 && number && mode7Open(number));
+    if (!holdMode && holdVoice7) stopHold7(true);
     if (m !== 12 && holdVoice12) stopHold12(true);
     if (m === 12 && holdVoice12 && holdVoice12.audio) {
       const k = fade12Level();
