@@ -694,7 +694,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     else if (mode === 17) html = number ? `<span class="oled-line"><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${DOREMI_OF[number]}</span></span>` : ""; // web 12 (M): shape / C~G (도~솔), no number
     else if (mode === 18) html = number ? `<span class="oled-fit" data-ref="Bb">${NOTE_OF[number]}</span>` : ""; // web 15: the note alone (sized for the widest, Eb / Bb)
     else if (mode === 19 || mode === 20) html = number ? `<span class="oled-line"><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${mode === 19 ? NOTE_OF[number] : DOREMI_OF[number]}</span></span>` : ""; // web 16 / 17: shape / note
-    else if (mode === 21) html = number ? `<span class="oled-fit" data-ref="D">${DOREMI_OF[number]}</span>` : ""; // web 18: 도~솔 alone
+    else if (mode === 21) html = number ? `<span class="oled-fit" data-ref="Bb">${DOREMI_OF[number]}</span>` : ""; // web 18: 도~솔 alone, sized like web 15 (P) so the letters match
     else if (mode === 2 || mode === 6 || mode >= 13) html = ""; // mode 6 (mute) and 14 (web 8, dingdong): panel stays dark
     else if (mode === 9 || mode === 10) html = number ? `<span class="oled-shape-only">${SHAPE_OF[number]}</span>` : ""; // modes 9 & 10: 5-group shape alone (○ △ □ ☆ ✕)
     else if (mode === 11) html = number ? `<span class="oled-shape-only">${SHAPE11_OF[number]}</span>` : ""; // mode 11: shape alone (○ △ □ ☆ ✕) matched to melodies 1~5
