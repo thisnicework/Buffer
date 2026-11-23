@@ -48,12 +48,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
 .now-mode{font-size:44px;font-weight:700;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
 .now-desc{margin:4px 0 0;color:var(--ink)}
 
-.next{
-  width:100%;padding:18px;border:0;border-radius:14px;background:var(--ink);color:var(--paper);
-  font-size:19px;font-weight:700;cursor:pointer;letter-spacing:-.02em;
-}
-.next:disabled{background:var(--soft);color:var(--mute);cursor:default}
-.next:not(:disabled):active{transform:scale(.99)}
+.seat-msg{margin:0;font-size:14px;min-height:1.5em;color:var(--live)}
+.seat-msg.bad{color:var(--warn)}
 
 /* mode list */
 .list-title{margin:0;font-size:13px;color:var(--mute)}
@@ -156,7 +152,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <p class="now-desc" id="now-desc"></p>
       </section>
 
-      <button class="next" id="next" type="button">다음 모드</button>
       <p class="err" id="err"></p>
 
       <section class="step7" id="step7" aria-label="모드 H 소리 열기" hidden>
@@ -213,6 +208,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         </div>
         <button class="btn" id="reset-claims" type="button">번호 전체 초기화</button>
       </section>
+      <p class="seat-msg" id="seat-msg" role="status"></p>
     </div>
   </main>
 </div>
@@ -498,8 +494,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const cur = !dirty() && cuePos >= 0 ? cuePos : rows.findIndex((li) => +li.dataset.n === state.mode);
     rows.forEach((li, i) => { li.querySelector(".mode").setAttribute("aria-current", String(i === cur)); li.querySelector(".now-tag").hidden = i !== cur; });
     if (cur >= 0 && rows[cur].dataset.label) $("now-desc").textContent = rows[cur].dataset.label;
-    $("next").disabled = !next || busy;
-    $("next").textContent = next ? `다음 모드 → ${L(next.n)}` : "마지막 모드입니다";
     renderStep7();
   }
 
@@ -558,7 +552,6 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     }
   }
 
-  $("next").addEventListener("click", () => { const n = state && nextInOrder(); if (n) { const prev = cuePos; cuePos = n.i; setMode(n.n, prev); } }); // follows the cue order
 
   // RUN: off = tapping a row does nothing (safe to look around / drag); on = a tap switches the show at once.
   // Always starts off when the page opens.
@@ -604,14 +597,23 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     $("pick-toggle").setAttribute("aria-pressed", String(on));
     $("pick-toggle").classList.toggle("primary", on);
   }
+  // result of 번호 선택 모드 / 번호 전체 초기화, shown right under those buttons
+  function seatMsg(text, bad) {
+    $("seat-msg").textContent = text;
+    $("seat-msg").classList.toggle("bad", !!bad);
+  }
   async function setPick(on) {
-    $("err").textContent = "";
+    seatMsg("바꾸는 중…");
     try {
       const r = await fetch("/api/pickmode", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.message || "번호 선택 모드 전환 실패 (" + r.status + ")");
-      renderPick(j.pickMode);
-    } catch (e) { $("err").textContent = e.message; }
+      if (!r.ok) throw new Error(j.message || "서버 응답 " + r.status);
+      // read it back: "done" only when the server really holds it
+      const back = await (await fetch("/api/pickmode", { cache: "no-store" })).json();
+      renderPick(back.pickMode);
+      if (back.pickMode !== on) throw new Error("서버에 아직 " + (back.pickMode ? "직접 선택" : "선착순 자동") + "으로 남아 있어요");
+      seatMsg(on ? "번호 선택 모드 켜짐 · 관객이 번호를 직접 골라요" : "번호 선택 모드 꺼짐 · 선착순 자동 배정");
+    } catch (e) { seatMsg("번호 선택 모드 전환 실패 · " + e.message, true); }
   }
   $("pick-toggle").addEventListener("click", () => {
     if (pickMode === null) return;
@@ -619,20 +621,26 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     $("confirm-text").textContent = pickMode
       ? "번호 선택 모드를 끌까요? 다시 선착순으로 배정돼요."
       : "관리자 확인용 옵션입니다. 번호를 선택할 수 있는 모드로 전환할까요?";
+    $("confirm-yes").textContent = pickMode ? "끄기" : "켜기";
     $("confirm").hidden = false;
     $("confirm-yes").focus();
   });
   async function resetClaims() {
-    $("err").textContent = "";
+    seatMsg("초기화 중…");
     try {
       const r = await fetch("/api/claims/reset", { method: "POST" });
-      if (!r.ok) throw new Error("초기화 실패 (" + r.status + ")");
-      refreshClaims();
-    } catch (e) { $("err").textContent = e.message; }
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || j.error || "서버 응답 " + r.status);
+      const back = await (await fetch("/api/claims", { cache: "no-store" })).json();
+      $("seats-count").textContent = `${back.taken.length} / 45 선택됨`;
+      if (back.taken.length) throw new Error(`아직 ${back.taken.length}개 번호가 남아 있어요`);
+      seatMsg("관객 번호 전체 초기화 완료");
+    } catch (e) { seatMsg("초기화 실패 · " + e.message, true); }
   }
   $("reset-claims").addEventListener("click", () => {
     pending = "reset";
     $("confirm-text").textContent = "관객 번호를 모두 풀까요? 다들 다시 골라야 해요.";
+    $("confirm-yes").textContent = "초기화";
     $("confirm").hidden = false;
     $("confirm-yes").focus();
   });
