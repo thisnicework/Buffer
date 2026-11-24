@@ -1102,7 +1102,12 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     const from = t ? (t.from && state[t.from]) || state.updatedAtMs : null; // when this run began on the server
     const src = t ? srcOf(t) : null;
     const key = t ? src + ":" + from : null;
-    if (key === trackKey) return; // same run as before (e.g. 4 -> 5): keep playing
+    if (key === trackKey) {
+      // Nothing new to start. But when the key is null (a mode with no track) and a MUTE fade from mode 6 is still
+      // running, leaving mode 6 for another no-track mode must cut that fade now: otherwise speech keeps sounding.
+      if (key === null && state && state.mode !== 6) { stopFades(); stopAll(); }
+      return; // same run as before (e.g. 4 -> 5): keep playing
+    }
     trackKey = key;
     clearTimeout(trackTimer);
     stopFades();
