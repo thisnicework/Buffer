@@ -643,6 +643,77 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script>
+/*
+ * ============================================================================
+ * 실제 디바이스(임베디드) 이식 가이드
+ * ----------------------------------------------------------------------------
+ * 이 웹(/rx)은 관객이 받는 디바이스 한 대의 동작을 그대로 흉내 낸다. 실제 펌웨어로 옮길 때는
+ * 아래 규칙을 그대로 따르고, 이 파일의 숫자 표(NOTE_OF, VOICE4_OF, VOICE5_OF, MELODY 등)는 한 글자도 바꾸지 말 것.
+ *
+ * 0. 하드웨어 (rx.html 의 board.png 와 SVG 기준)
+ *    - OLED 0.96" 128x64 단색. 표시 영역 활성부만 쓴다.
+ *    - 내장 LED 2개 (0603 흰색, 보드 상단 OLED 옆 · Q5 옆). 두 개를 같이 켜고 끈다. 밝기 조절이 필요하면 PWM.
+ *    - 푸시 버튼 1개 (플런저). 누르면 "눌림" 이벤트 1회, 누른 채 있으면 "누름 유지", 떼면 "뗌" 이벤트.
+ *    - 소형 스피커 1개 (음원 재생), 안테나(무선 통신).
+ *
+ * 1. 시간 기준은 전부 서버 시각이다 (가장 중요)
+ *    - 디바이스 시계는 믿지 않는다. /api/state 응답의 nowMs 로 보정한다:
+ *        offset = nowMs - (요청을 보낸 시각 + 응답을 받은 시각) / 2
+ *    - 모든 타이밍(LED 플래시, 음원 시작 지점, 모드 6 페이드, 모드 7·12 시간)은
+ *        서버 시각 = 디바이스 millis() + offset
+ *      기준으로 계산한다. 그래야 관객 모든 디바이스가 같은 순간에 움직인다.
+ *    - 모드 전환 시각은 서버가 준 updatedAtMs 다. 전환이 "시작" 된 순간이다.
+ *
+ * 2. 상태 받기
+ *    - 기본은 /api/state 를 주기적으로 물어보는 폴링. 실시간 푸시(show_state 변경)가 오면 즉시 반영하고,
+ *      폴링은 안전망으로 계속 유지한다.
+ *    - 받은 상태: mode (모드 번호), updatedAtMs, timerStartedAtMs, open7 (모드 7 열린 번호 비트마스크).
+ *    - 디바이스 자신의 번호(1~45)는 관객이 선택해서 서버에 확정된 번호만 쓴다 (미확정이면 번호 없음).
+ *
+ * 3. 모드 번호 (운영 콘솔 tx.html 의 DEVICE 표 기준, 0~18)
+ *    - 0 로고 / 1·3 개인번호 / 2 공연 안내 멘트 / 4·5 개인번호+인물 발화 / 6 MUTE(전부 끔, 음원은 3초 페이드 아웃)
+ *    - 7 버튼 ON 번호(17·32·11·31·10·전체) / 8 띵동 / 9 도형+음계 / 10 도형+멜로디
+ *    - 11 개인번호+도형+음계 누르고 있으면 15초 지속 후 10초 페이드 / 12 도형+도레미파솔
+ *    - 13 LED 5번 깜빡 / 14 개인번호+도형+음계 → 터디 / 15 음계만 / 16 도형+음계(번호 없음) /
+ *      17 도형+도레미파솔(번호 없음) / 18 도레미파솔(번호 없음)
+ *    - 아래 코드의 INNER_MODE 는 예전 14개 모드 번호를 잇기 위한 변환표다. 새로 옮길 때는 위 DEVICE 표 번호로
+ *      직접 구현하고 INNER_MODE 는 옮기지 않는다.
+ *
+ * 4. LED (이 파일의 SWITCH_* 와 setInterval 블록이 정답)
+ *    - 모드가 바뀔 때마다 (서버 updatedAtMs 가 바뀔 때마다): LED 를 300 ms 끄고, 300 ms 켠다 (즉시 전환, 페이드 없음).
+ *    - 그 뒤 모드별 규칙: 0 = 켜짐(누르면 최대 밝기, 떼면 서서히 줄어듦) / 13 = 5번 깜빡 (0.2 s 켬 · 0.2 s 끔, 2 s) /
+ *      나머지 = 꺼짐.
+ *    - 처음 상태를 받을 때는 플래시하지 않는다 (중간에 켠 기기가 깜빡이면 안 된다).
+ *
+ * 5. OLED
+ *    - 모드에 따라 표시: 번호(크게), 도형(○ △ □ ☆ ✕), 음 이름(C D Eb G Bb), 도레미(도 레 미 파 솔), 또는 로고/빈 화면.
+ *    - 표시 번호는 window.rxShown(number) 로 바꾼 값(세트 번호 ×2 등)을 쓴다. 누름 리포트도 같은 값을 보낸다.
+ *    - 번호 1~45 와 그 음 / 도형 / 도레미 표는 NOTE_OF 에서 한 번에 파생된다. 표를 손으로 고치지 말 것.
+ *    - 버튼을 누르면 "클릭" 메시지를 1 s 동안 띄운다 (OLED).
+ *
+ * 6. 버튼 (모드 번호는 3번 DEVICE 표 기준)
+ *    - 한 번 누르면 나는 소리 (눌렀을 때 한 번만): 8 띵동 / 9·14·16 짧은 음 (음 이름) / 10 멜로디 1~5 (도형에 따라).
+ *      ※ 옛 코드의 "2.5초 긴 음" 은 지금 어떤 모드 번호에도 연결돼 있지 않다.
+ *    - 누르고 있는 동안만 소리가 나고 떼면 멈추는 모드: 7 (열린 번호만) / 11 (15초 유지 후 10초 페이드) /
+ *      12·17 도레미파솔 / 15 음 이름 (짧게 눌러도, 길게 눌러도 누르는 동안만) / 18 도레미파솔 (도~솔 이름).
+ *    - 누를 때마다 누름 리포트를 보낸다 (아래 8번). 모드 0~6 과 13 은 버튼이 소리를 내지 않는다.
+ *
+ * 7. 음원
+ *    - 음 파일 5개 (C, D, Eb, G, Bb), 멜로디 1~5, 도레미(C~G), 개인 발화 1~7 (모드 4/5). 파일 이름은 public/assets/rx 의 mp3 와 같다.
+ *    - 모드마다 "언제 시작하는지" 는 서버 시각 기준이다. 모드가 바뀌면 이전 음원은 즉시 멈춘다.
+ *      모드 6 (MUTE) 으로 바뀔 때만 발화 음원을 3초에 걸쳐 페이드 아웃한다.
+ *    - 같은 모드에 늦게 들어온 기기는 같은 지점부터 이어 듣는다 (루프 음원은 서버 시각으로 위치 계산).
+ *
+ * 8. 누름 리포트 (TouchDesigner 로 전달)
+ *    - 한 번의 누름마다 { 표시번호, 누름(1)/뗌(0), 모드, 서버시각 } 를 보낸다. 기기는 같은 JSON 을 같은 채널로 보내야 한다.
+ *    - 현재 웹은 전송 실패를 무시하고 재전송하지 않는다 (fetch 의 catch 에서 버림). 임베디드에서 재시도 여부를
+ *      정하는 것은 별도 결정이다.
+ *
+ * 9. 검증 방법
+ *    - split.html 미리보기와 rxAdmin 미리보기 (rxPush 로 푸시를 손으로 재현)에서 모드 전환 타이밍과 LED 플래시를 확인한 뒤 옮긴다.
+ *    - 기기 두 대 이상을 같은 서버에 붙여 LED 플래시와 음원 시작이 동시에 나오는지 확인한다.
+ * ============================================================================
+ */
 // Follow the show: /tx sets the mode, every phone's OLED shows what that mode calls for (DEVICE table, 미니패널 column).
 (() => {
   const oled = document.getElementById("oled-num");
@@ -1414,18 +1485,31 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   }
   setInterval(syncMain, 500);
 
-  // Web mode 13: the board's two built-in LEDs blink 5 times, 0.2 s on / 0.2 s off (2 s in all), counted from the
-  // moment /tx switched (server clock) so every phone blinks together; then they stay off. Panel dark, button silent.
+  // EVERY mode switch: the built-in LEDs go dark for SWITCH_OFF_MS, then come back on for SWITCH_ON_MS (an instant
+  // off -> on, no fade), and only then the mode's own LED rule starts. The switch moment is the server's updatedAtMs
+  // (written by /tx), so every phone flashes at the same time. A phone that opens mid-show never sees a flash, because
+  // its first state is taken as "already running", not as a switch.
+  // Web mode 13 (LED 13 in the DEVICE table): after the flash, the LEDs blink 5 times, 0.2 s on / 0.2 s off (2 s in all).
   // Web mode 0: the LEDs stay lit; pressing the button turns them up to full, and on release they ease back down.
+  // Every other mode: the LEDs stay dark after the flash. The panel and the button are not affected.
+  const SWITCH_OFF_MS = 300, SWITCH_ON_MS = 300, SWITCH_FLASH_MS = SWITCH_OFF_MS + SWITCH_ON_MS;
   const leds = document.getElementById("leds");
   let ledHeld = false;
+  let ledSeenUpdated = undefined, ledSwitchMs = null; // ledSwitchMs: server-clock ms of the latest mode switch
   document.addEventListener("rx-down", () => { ledHeld = true; });
   document.addEventListener("rx-up", () => { ledHeld = false; });
   setInterval(() => {
     const m = state ? state.mode : -1;
+    if (state && typeof state.updatedAtMs === "number" && state.updatedAtMs !== ledSeenUpdated) {
+      if (ledSeenUpdated !== undefined) ledSwitchMs = state.updatedAtMs; // a later update = /tx switched the mode
+      ledSeenUpdated = state.updatedAtMs;
+    }
+    const since = ledSwitchMs === null ? -1 : Date.now() + offset - ledSwitchMs; // ms since the switch, server clock
     let op = 0, glow = "1", tr = "none";
-    if (m === 15) {
-      const t = Date.now() + offset - state.updatedAtMs;
+    if (since >= 0 && since < SWITCH_FLASH_MS) {
+      op = since < SWITCH_OFF_MS ? 0 : 1; // off, then on (instant)
+    } else if (m === 15) {
+      const t = since - SWITCH_FLASH_MS; // the 5 blinks start once the flash is over
       op = t >= 0 && t < 2000 && Math.floor(t / 200) % 2 === 0 ? 1 : 0;
     } else if (m === 0) {
       op = ledHeld ? 1 : 0.8;
