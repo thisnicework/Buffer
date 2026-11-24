@@ -644,8 +644,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // Board px: 16.61 px/mm, axis x=115, y = -(mm above the board's top edge). Proportions from the photo:
   // collar 8.85 dia | nut 7.2 across corners x 1.75 | smooth concave flare 2.2 -> 6 (no thread, as in the photo) | plunger 2.2 x 1.8 | cap 4.1 x 2.9
   const svg = document.getElementById("btn-svg");
-  const BASE_PX = 16.61, K = 1.155; // K: whole-button scale (10% + 5% larger)
-  const PX = BASE_PX * K, AX = 105, W = 1.26; // W = case top wall, mm above the board edge (stays where it was)
+  const BASE_PX = 16.61, K = 1.12; // K: whole-button scale (10% + 5% larger, then 3% smaller)
+  const PX = BASE_PX * K, AX = 101, W = 1.26; // W = case top wall, mm above the board edge (stays where it was)
   const Y = (mm) => (-mm * PX + W * (PX - BASE_PX)).toFixed(1), X = (mm) => (AX + mm * PX).toFixed(1);
   const RAD = Math.PI / 180, PH = 105;
   const c = (th, ph = PH) => Math.cos((th - ph) * RAD);
@@ -661,7 +661,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const NR = 3.6; // nut circumradius; flat face toward the viewer spans -R/2..R/2
   // whole button stretched 10% wider, around the button's own axis (AX)
   svg.innerHTML = `
-    <g transform="translate(${AX} 0) scale(1.155 1) translate(${-AX} 0)">
+    <g transform="translate(${AX} 0) scale(1.064 1) translate(${-AX} 0)">
     <defs>
       <linearGradient id="chr" x1="0" y1="0" x2="1" y2="0">${stops(chromeL)}</linearGradient>
       <linearGradient id="blk" x1="0" y1="0" x2="1" y2="0">${stops(glossL)}</linearGradient>
