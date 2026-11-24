@@ -597,6 +597,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     <!-- plunger + cap: the part that moves. Drawn before the bushing and flare so that, pressed in,
          the plunger slides down inside them instead of covering the thread -->
     <g id="press" class="press">
+      <!-- invisible touch/click target, about 8 mm x 11 mm around the cap (the cap alone is ~4 mm wide): fingers and mice
+           hit the button without needing the exact cap. Moves with the plunger; pointer capture keeps the release. -->
+      <rect x="${X(-4)}" y="${Y(W + 14.5)}" width="${(8 * PX).toFixed(1)}" height="${(11 * PX).toFixed(1)}" rx="${(1.5 * PX).toFixed(1)}" fill="transparent" pointer-events="all"/>
       <rect x="${X(-1.1)}" y="${Y(W + 7.6)}" width="${(2.2 * PX).toFixed(1)}" height="${(2.1 * PX).toFixed(1)}" fill="url(#chr)"/>
       <rect x="${X(-2.05)}" y="${Y(W + 10.45)}" width="${(4.1 * PX).toFixed(1)}" height="${(2.9 * PX).toFixed(1)}" rx="${(.45 * PX).toFixed(1)}" fill="url(#blk)"/>
       <rect x="${X(-2.05)}" y="${Y(W + 7.95)}" width="${(4.1 * PX).toFixed(1)}" height="${(.4 * PX).toFixed(1)}" fill="url(#capTop)" transform="rotate(180 ${AX} ${Y(W + 7.75)})"/>
