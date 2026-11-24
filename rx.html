@@ -82,7 +82,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   margin:calc(var(--h) / -2) 0 0 calc(var(--w) / -2);
   clip-path:polygon(0 0,85.9% 0,85.9% 58%,100% 58%,100% 100%,0 100%);
 }
-.pcb.top{background:url(/assets/rx/board.png) center/100% 100% no-repeat}
+.pcb.top{background:url(/assets/rx/board.png) center/100% 100% no-repeat;filter:brightness(.62) saturate(.8)} /* board photo darkened; the LED glow layer sits above it */
 .pcb.core{background:#0e2613}
 .pcb.back{background:#0b1f10}
 
@@ -99,8 +99,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .ov.g2{transform:translateZ(calc(var(--w) * .022))}
 .ov.g3{transform:translateZ(calc(var(--w) * .027))}
 .ov.glass{transform:translateZ(calc(var(--w) * .032))}
+.ov.oled-top{transform:translateZ(calc(var(--bd) / 2 + var(--w) * .004))} /* just in front of the lid (.f-front at bd/2) */
 /* push button: one pre-drawn SVG layer just behind the board (cheap on phones); only the cap+plunger move */
 .ov.btn2{transform:translateZ(calc(var(--t) * -1 - var(--mm) * .2))}
+/* button darkened to match the device (same as the board): the chrome cap and nut read dark, the lit LEDs/OLED stand out */
+.ov.btn2 #btn-svg{filter:brightness(.62) saturate(.8)}
 .ov.btn2 #press{pointer-events:auto;cursor:pointer;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:transform .16s cubic-bezier(.3,1.25,.5,1)}
 .ov.btn2 #press.down{transform:translateY(20px);transition:transform .08s ease-in} /* 1.2 mm of travel */
 
@@ -111,9 +114,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   width:calc(206 / 696 * 100%);height:calc(374 / 900 * 100%);
   display:flex;align-items:center;justify-content:center;pointer-events:none;
   font:400 calc(var(--w) * .228)/1 "Helvetica Neue",Helvetica,Arial,sans-serif;letter-spacing:-.03em;
-  font-variant-numeric:tabular-nums;color:#eef3f8;
-  text-shadow:0 0 calc(var(--w) * .006) rgba(235,242,255,.7),0 0 calc(var(--w) * .02) rgba(220,232,255,.3);
-  filter:blur(.6px);opacity:.88;
+  font-variant-numeric:tabular-nums;color:#fff;
+  text-shadow:0 0 calc(var(--w) * .006) rgba(255,255,255,.95),0 0 calc(var(--w) * .024) rgba(225,238,255,.55);
+  filter:blur(.3px) brightness(2.2);opacity:1; /* lit OLED: boosted well past white to counter the dimming lid; sharp */
 }
 .oled-line{display:flex;flex-direction:column;align-items:center;white-space:nowrap;font-size:.72em} /* chapter 3 stack: sized so "C#4" fits the panel width */
 .oled-fit{display:inline-block;line-height:1;white-space:nowrap} /* size and centring set by fitText() */
@@ -123,7 +126,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .oled-shape{font-size:.8em;line-height:1;letter-spacing:0}
 .oled-shape-only{display:inline-block;line-height:1;letter-spacing:0;white-space:nowrap} /* mode 9: size and centring set by fitShape() */
 /* mode 0: the BUFFER 버퍼 logo with its dots, cropped to its ink (viewBox) and as wide as the panel */
-.ov .oled-logo{display:block;width:100%;height:100%;overflow:hidden;filter:drop-shadow(0 0 calc(var(--w) * .006) rgba(235,242,255,.7))}
+.ov .oled-logo{display:block;width:100%;height:100%;overflow:hidden;filter:drop-shadow(0 0 calc(var(--w) * .006) rgba(255,255,255,.95))}
 .oled-shape.tri{} /* the △ glyph draws much larger than ● and □; shrink it to match */ /* under the number, both centred */
 /* text shown above the case, centred, when the button is clicked */
 @font-face{font-family:"SUIT Variable";font-weight:100 900;font-style:normal;font-display:swap;src:url(/fonts/SUIT-Variable.woff2) format("woff2-variations")}
@@ -201,7 +204,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 }
 
 /* dark mode (rx only): dark page, smoky case, iOS-dark picker */
-:root{--paper:#0E0F10;--pp:rgba(200,206,204,.10);--pp-edge:rgba(170,176,174,.32);color-scheme:dark}
+/* device darkened so the LEDs (and the lit OLED) stand out: a near-black case, edges just visible */
+:root{--paper:#0E0F10;--pp:rgba(18,20,21,.6);--pp-edge:rgba(72,78,80,.45);color-scheme:dark}
 .face{
   background:var(--grain),linear-gradient(160deg,rgba(255,255,255,.06),rgba(235,238,236,.02) 60%,rgba(255,255,255,.07)),var(--pp);
   box-shadow:inset 0 0 calc(var(--w) * .05) rgba(255,255,255,.12);
@@ -274,7 +278,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
             <line x1="222" y1="22" x2="222" y2="403" stroke="#8d9091" stroke-opacity=".6" stroke-width="1.2"/>
             <rect x="10" y="20" width="260" height="385" rx="1.5" fill="url(#sheen)"/>
           </svg>
-          <div class="oled-num" id="oled-num" aria-live="polite"></div>
         </div>
 
         <!-- 3.5 cm silver spring antenna, pin in the yellow-ring pad, lying along the board notch (~16 px/mm) -->
@@ -339,6 +342,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
         <div class="face f-top"></div>
         <div class="face f-front"><div class="lid"></div><div class="latch"></div></div>
       </div>
+      <!-- the lit digits / logo sit in front of the frosted lid (which tints everything behind it), so they stay at full white -->
+      <div class="ov oled-top"><div class="oled-num" id="oled-num" aria-live="polite"></div></div>
     </div>
     <div class="oled-msg" id="oled-msg" aria-live="polite"><span class="oled-msg-pill">CLICK</span></div>
   </div>
@@ -1549,9 +1554,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       const t = since - SWITCH_FLASH_MS; // the 5 blinks start once the flash is over
       op = t >= 0 && t < 2000 && Math.floor(t / 200) % 2 === 0 ? 1 : 0;
     } else if (m === 0) {
+      // on: a quick, eased rise with a modest halo (2.4x made a big smear that lingered as an afterimage)
+      // off: a short ease-out back to the idle level, so no halo hangs around after release
       op = ledHeld ? 1 : 0.8;
-      glow = ledHeld ? "2.4" : "1";
-      tr = ledHeld ? "opacity .12s ease-out, transform .12s ease-out" : "opacity 1.8s ease-out, transform 1.8s ease-out";
+      glow = ledHeld ? "1.35" : "1";
+      tr = ledHeld ? "opacity .1s ease-out, transform .1s ease-out" : "opacity .45s ease-out, transform .45s ease-out";
     }
     if (leds.style.transition !== tr) leds.style.transition = tr;
     if (leds.style.getPropertyValue("--glow") !== glow) leds.style.setProperty("--glow", glow);
