@@ -160,7 +160,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       </section>
 
       <section class="step7" id="shapes" aria-label="소리 낼 도형" hidden>
-        <h2 class="list-title">도형 · 누른 도형의 폰만 소리가 나요 (전체 = 모두)</h2>
+        <h2 class="list-title">도형 · 누른 도형의 폰만 소리가 나요 (전체 = 모두, 다시 누르면 해제 = 소리 없음)</h2>
         <div class="step7-nums" id="shape-btns"></div>
       </section>
 
@@ -500,7 +500,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     const on = SHAPE_MODES.includes(state.mode);
     $("shapes").hidden = !on;
     if (!on) return;
-    const mask = typeof state.open7 === "number" ? state.open7 : 32;
+    const mask = typeof state.open7 === "number" ? state.open7 : 0;
     for (const b of $("shape-btns").children) {
       const bit = +b.dataset.bit;
       b.setAttribute("aria-pressed", String(bit === 5 ? !!(mask & 32) : !(mask & 32) && !!(mask & (1 << bit))));
@@ -510,7 +510,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   $("shape-btns").addEventListener("click", (e) => {
     const b = e.target.closest("button");
     if (!b || !state || busy) return;
-    setOpen7(1 << +b.dataset.bit); // just this shape (전체 = bit 5 = 32)
+    const bit = 1 << +b.dataset.bit; // just this shape (전체 = bit 5 = 32)
+    setOpen7((state.open7 || 0) === bit ? 0 : bit); // tapping the picked one again clears it: nothing sounds
   });
   function renderStep7() {
     renderShapes();

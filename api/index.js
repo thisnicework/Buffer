@@ -228,7 +228,7 @@ async function setStep(step) {
 // (5 이상은 타이머를 그대로 두므로 9~13 은 8로 저장). show_state 갱신이 Realtime 으로 폰을 깨우는 역할은 그대로.
 const MODE_MAX = 18;
 // modes whose phones show a shape (J K L M O Q R): /tx picks which shape sounds, in the same open7 bits as mode 7
-// (bit 0~4 = ○ △ □ ☆ ✕, 32 = 전체). Entering one of them starts at 전체, so nothing changes until a shape is picked.
+// (bit 0~4 = ○ △ □ ☆ ✕, 32 = 전체). Entering one of them starts with nothing picked: no phone sounds until /tx picks.
 const SHAPE_MODES = [9, 10, 11, 12, 14, 16, 17]; // 15 P 음계만 · 16 Q 도형+음계 · 17 R 도형+도레미파솔 · 18 S 도레미파솔 (번호 없는 화면들)
 const MODE_ROW = { show_id: "MODE", code: "SHOW-MODE", name: "공연모드", phone: "show-mode" };
 async function getModeRow() {
@@ -451,7 +451,7 @@ async function handler(req, res) {
       memState.mode = mode;
       memState.updated_at = new Date().toISOString();
       if (mode === 7) memStep = 0;
-      if (SHAPE_MODES.includes(mode)) memStep = 32;
+      if (SHAPE_MODES.includes(mode)) memStep = 0;
       return send(res, 200, statePayload(memState, memStep));
     }
     // the real mode number goes in the marker row first, then show_state (1~8, same timer rule) wakes the phones
@@ -470,11 +470,11 @@ async function handler(req, res) {
     if (data && data.error === "bad_mode") return send(res, 400, { error: "bad_mode", message: `Supabase가 아직 모드 ${mode}를 받지 않습니다. supabase-schema.sql 의 모드 범위(1~10) 부분을 다시 실행해주세요.` });
     if (data && data.error) return send(res, 400, { error: data.error, message: `모드를 바꾸지 못했습니다 (${data.error}).` });
     if (mode === 7) await setStep(0); // entering mode 7: every number starts muted
-    if (SHAPE_MODES.includes(mode)) { // entering a shape mode: every shape sounds (전체) until /tx picks one
-      await setStep(32);
-      await supabase.rpc("set_show_open7", { p_mask: 32, p_secret: SHOW_SECRET }).then(() => {}, () => {});
+    if (SHAPE_MODES.includes(mode)) { // entering a shape mode: nothing picked, so no phone sounds until /tx picks
+      await setStep(0);
+      await supabase.rpc("set_show_open7", { p_mask: 0, p_secret: SHOW_SECRET }).then(() => {}, () => {});
     }
-    return send(res, 200, statePayload(data, mode === 7 ? 0 : SHAPE_MODES.includes(mode) ? 32 : await getStep()));
+    return send(res, 200, statePayload(data, mode === 7 || SHAPE_MODES.includes(mode) ? 0 : await getStep()));
   }
 
   if (route === "GET /api/claims") {

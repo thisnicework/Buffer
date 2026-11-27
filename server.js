@@ -911,7 +911,7 @@ async function api(req, res, url) {
     }
     const r = await dbSetMode(mode);
     if (mode === 7 && !r.error) await dbSetStep(0); // entering mode 7: every number starts muted
-    if ([9, 10, 11, 12, 14, 16, 17].includes(mode) && !r.error) await dbSetStep(32); // shape modes start at 전체
+    if ([9, 10, 11, 12, 14, 16, 17].includes(mode) && !r.error) await dbSetStep(0); // shape modes start with nothing picked
     if (r.error === "unauthorized") {
       return send(res, 500, { error: "secret_mismatch", message: "Supabase show_control 비밀번호가 ADMIN_TOKEN 과 다릅니다." });
     }
