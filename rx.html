@@ -1776,8 +1776,17 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (sounding(nowNote)) nowNote.pause();
     if (nowMain) { nowMain.pause(); nowMain = null; }
   }
-  document.addEventListener("visibilitychange", () => { if (document.hidden) silenceAll(); else { pull(); pullClaims(); } });
-  addEventListener("pagehide", silenceAll);
+  // Coming back (screen on again, back from another app or site): an iPhone's audio after the background can report
+  // "running" yet play nothing, so presses stayed silent until the audience reloaded. Reload for them instead: the
+  // number is kept (it is on the server under this phone's id) and the fresh page's audio works on the next tap.
+  let hiddenAt = 0;
+  const comeBack = () => { if (hiddenAt && Date.now() - hiddenAt > 800 && !window.rxAdmin) location.reload(); }; // not the /split preview
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { hiddenAt = Date.now(); silenceAll(); }
+    else { comeBack(); pull(); pullClaims(); }
+  });
+  addEventListener("pagehide", () => { hiddenAt = hiddenAt || Date.now(); silenceAll(); });
+  addEventListener("pageshow", (e) => { if (e.persisted && !window.rxAdmin) location.reload(); }); // back from another site (page kept in memory)
 })();
 </script>
 </body>
