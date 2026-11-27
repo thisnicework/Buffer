@@ -1217,7 +1217,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const TRACKS = {
     // mode 2 starts the moment /tx switches (a phone that hears of it ~0.1~0.3 s later joins at that point);
     // modes 4 and 5 switch the panel at once but their voices start 2 s after the switch
-    2: { src: "/assets/rx/mode2-announcement.mp3", delay: 0 }, // 공연 안내 멘트 (최승원.wav)
+    2: { src: "/assets/rx/mode2-announcement.mp3", delay: 0 }, // 공연 안내 멘트 (New_Project_01_승_TTS.wav, 29 s)
     // modes 4 and 5: each number hears its own voice, a new one on entering 5; no number (or 99) -> voice 7 / voice 1
     4: { src: () => VOICE[VOICE4_OF[number] || 7], delay: 2000 },
     5: { src: () => VOICE[VOICE5_OF[number] || 1], delay: 2000 },
