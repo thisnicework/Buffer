@@ -1492,6 +1492,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // also web 12 (도레미파솔): same hold-to-sustain, given the doremi file as src. The doremi tones are a plain,
   // steady low tone that sounds quieter on phone speakers than the recorded notes, so they play +6 dB (×2).
   const DOREMI_GAIN = 2;
+  const DOREMI_ONLY_GAIN = 2.5; // web 18 (S, 도레미파솔 alone): a little louder again (+8 dB)
   function startHold7(src) {
     stopHold7(true);
     if (sounding(nowNote)) nowNote.pause();
@@ -1507,7 +1508,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       node.loop = true;
       node.loopStart = lp.start;
       node.loopEnd = lp.end;
-      const level = src.includes("-doremi-") ? DOREMI_GAIN : 1;
+      const level = !src.includes("-doremi-") ? 1 : state && state.mode === 21 ? DOREMI_ONLY_GAIN : DOREMI_GAIN;
       gain.gain.setValueAtTime(level, t);
       node.connect(gain).connect(actx.destination);
       node.start(t, 0);
