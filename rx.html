@@ -1189,6 +1189,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const stopAll = () => Object.values(players).forEach((a) => a.pause());
   let trackKey = null, trackTimer = null;
   function syncAnnouncement() {
+    if (document.hidden) return; // in the background nothing (re)starts; coming back picks it up (silenceAll below)
     const t = state && TRACKS[state.mode];
     const from = t ? (t.from && state[t.from]) || state.updatedAtMs : null; // when this run began on the server
     const src = t ? srcOf(t) : null;
@@ -1207,7 +1208,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (!t) return;
     const audio = players[src], startAt = from + t.delay;
     const start = () => {
-      if (trackKey !== key) return; // the mode changed while we waited
+      if (trackKey !== key || document.hidden) return; // the mode changed while we waited, or the page went away
       let late = (Date.now() + offset - startAt) / 1000;
       if (audio.loop) {
         // looping voice: a phone that arrives late joins at the same point in the loop as everyone else.
@@ -1760,7 +1761,21 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (mode === 7 || mode === 17 || mode === 18 || mode === 20 || mode === 21) stopHold7(false);
     else if (mode === 12) stopHold12(false);
   });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { pull(); pullClaims(); } });
+  // In the background (screen off, another app) an iPhone keeps playing what already sounds, but this page's code
+  // stops running, so it can't hear /tx switch modes: a looping 발화 went on into the next mode. So going to the
+  // background silences everything; coming back asks the server and rejoins whatever the current mode plays.
+  function silenceAll() {
+    clearTimeout(trackTimer);
+    trackKey = null; // so coming back starts the current track again (joining mid-way like a late phone)
+    stopFades();
+    stopAll();
+    stopShot("note"); stopShot("main");
+    stopHold7(true); stopHold12(true);
+    if (sounding(nowNote)) nowNote.pause();
+    if (nowMain) { nowMain.pause(); nowMain = null; }
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden) silenceAll(); else { pull(); pullClaims(); } });
+  addEventListener("pagehide", silenceAll);
 })();
 </script>
 </body>
