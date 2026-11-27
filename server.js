@@ -539,14 +539,9 @@ async function dbResetClaims() {
 // (예매 집계·관리자 목록은 A~D 회차만 보므로 영향 없음.) SHOW_STATE=local 이면 메모리에만 둔다.
 const PICK_ROW = { show_id: "PICK", seat: 0, code: "PICK-MODE", name: "번호선택모드", phone: "pick-mode" };
 let pickModeLocal = false;
+// 번호 선택 모드 was removed: numbers are always first come, first served
 async function dbGetPickMode() {
-  if (supabase && !STATE_LOCAL) {
-    try {
-      const { data, error } = await supabase.from("reservations").select("id").eq("code", PICK_ROW.code).maybeSingle();
-      if (!error) return (pickModeLocal = !!data);
-    } catch (_) {}
-  }
-  return pickModeLocal;
+  return false;
 }
 async function dbSetPickMode(on) {
   if (supabase && !STATE_LOCAL) {
@@ -848,8 +843,8 @@ async function api(req, res, url) {
     return send(res, 200, { pickMode: await dbGetPickMode() });
   }
   if (route === "POST /api/pickmode") {
-    const b = await readJson(req);
-    const r = await dbSetPickMode(b.on === true);
+    await readJson(req);
+    const r = await dbSetPickMode(false); // can only be turned off now
     if (r.error) return send(res, 503, { error: "pickmode", message: `번호 선택 모드를 바꾸지 못했습니다: ${r.error}` });
     broadcastClaims((await dbGetClaims(null)).taken);
     return send(res, 200, r);

@@ -119,10 +119,9 @@ const memTakenList = () => [...memClaimByNum.keys()].sort((a, b) => a - b);
 // 예매 집계·관리자 목록은 A~D 회차만 보므로 영향 없음.
 const PICK_ROW = { show_id: "PICK", seat: 0, code: "PICK-MODE", name: "번호선택모드", phone: "pick-mode" };
 let memPickMode = false;
+// 번호 선택 모드 was removed: numbers are always first come, first served (the PICK row, if any, is ignored)
 async function getPickMode() {
-  if (isStateLocal()) return memPickMode;
-  const { data, error } = await supabase.from("reservations").select("id").eq("code", PICK_ROW.code).maybeSingle();
-  return !error && !!data;
+  return false;
 }
 async function setPickMode(on) {
   if (isStateLocal()) { memPickMode = !!on; return { pickMode: memPickMode }; }
@@ -515,8 +514,8 @@ async function handler(req, res) {
     return send(res, 200, { pickMode: await getPickMode() });
   }
   if (route === "POST /api/pickmode") {
-    const b = await getJson(req);
-    const r = await setPickMode(b.on === true);
+    await getJson(req);
+    const r = await setPickMode(false); // can only be turned off now (clears a leftover PICK row)
     if (r.error) return send(res, 503, { error: "pickmode", message: `번호 선택 모드를 바꾸지 못했습니다: ${r.error}` });
     return send(res, 200, r);
   }
