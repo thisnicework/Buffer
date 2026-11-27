@@ -235,7 +235,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .notice-text{margin:0;padding:22px 18px 20px;font-size:16px;line-height:1.55;font-weight:500}
 .notice-ok{display:block;width:100%;padding:14px 0;border:0;border-top:1px solid #38383A;background:none;color:#F2F2F7;font:inherit;font-size:17px;font-weight:600;letter-spacing:inherit;cursor:pointer}
 .notice-ok:active{background:#2C2C2E}
-.notice-ok:focus-visible{outline:2px solid #F2F2F7;outline-offset:-4px}
+.notice-ok:focus,.notice-ok:focus-visible{outline:none}
 </style>
 </head>
 <body>
@@ -429,7 +429,6 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   if (new URLSearchParams(location.search).has("split")) { box.hidden = true; return; }
   const ok = document.getElementById("notice-ok");
   ok.addEventListener("click", () => { box.hidden = true; });
-  ok.focus();
 })();
 </script>
 <script>
