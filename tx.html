@@ -159,6 +159,11 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
         <div class="step7-nums" id="step7-nums"></div>
       </section>
 
+      <section class="step7" id="shapes" aria-label="소리 낼 도형" hidden>
+        <h2 class="list-title">도형 · 누른 도형의 폰만 소리가 나요 (전체 = 모두)</h2>
+        <div class="step7-nums" id="shape-btns"></div>
+      </section>
+
       <section class="seats" aria-label="번호 선택 모드">
         <div>
           <h2 class="list-title">관객 번호 배정</h2>
@@ -501,7 +506,28 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   const STEP7 = [17, 32, 11, 31, 10];
   const LABELS7 = [...STEP7.map((n) => String(n).padStart(2, "0")), "전체"];
   $("step7-nums").innerHTML = LABELS7.map((t, i) => `<button type="button" data-bit="${i}" aria-pressed="false">${t}</button>`).join("");
+  // shape modes: which shape sounds now (same bits as mode 7: 0~4 = ○ △ □ ☆ ✕, 32 = 전체); one at a time
+  const SHAPE_MODES = [9, 10, 11, 12, 14, 16, 17];
+  const SHAPE_LABELS = ["○", "△", "□", "☆", "✕", "전체"];
+  $("shape-btns").innerHTML = SHAPE_LABELS.map((t, i) => `<button type="button" data-bit="${i}" aria-pressed="false">${t}</button>`).join("");
+  function renderShapes() {
+    const on = SHAPE_MODES.includes(state.mode);
+    $("shapes").hidden = !on;
+    if (!on) return;
+    const mask = typeof state.open7 === "number" ? state.open7 : 32;
+    for (const b of $("shape-btns").children) {
+      const bit = +b.dataset.bit;
+      b.setAttribute("aria-pressed", String(bit === 5 ? !!(mask & 32) : !(mask & 32) && !!(mask & (1 << bit))));
+      b.disabled = busy;
+    }
+  }
+  $("shape-btns").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b || !state || busy) return;
+    setOpen7(1 << +b.dataset.bit); // just this shape (전체 = bit 5 = 32)
+  });
   function renderStep7() {
+    renderShapes();
     const on = state.mode === 7;
     $("step7").hidden = !on;
     if (!on) return;
