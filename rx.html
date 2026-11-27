@@ -1183,6 +1183,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const TD_SHAPE_GATED = [9, 10];
   const TD_OFF = [12, 20]; // web M (shape picking for sound only) and U: no visual, nothing goes to TouchDesigner
   let pressSent = false;
+  const diag = (info) => {
+    if (window.rxAdmin) return;
+    const payload = { ...info, n: number ? window.rxShown(number) : null, ua: navigator.userAgent.slice(0, 120), t: Date.now() };
+    fetch(PRESS_URL, {
+      method: "POST", keepalive: true,
+      headers: { "Content-Type": "application/json", apikey: PRESS_KEY, Authorization: "Bearer " + PRESS_KEY },
+      body: JSON.stringify({ messages: [{ topic: "presses", event: "diag", payload, private: false }] }),
+    }).catch(() => {});
+  };
+  window.rxDiag = diag;
   const sendPress = (s) => {
     if (window.rxAdmin || !number) return;
     if (s) pressSent = !(raw && (TD_OFF.includes(raw.mode) || (TD_SHAPE_GATED.includes(raw.mode) && !shapeOpen(number))));
@@ -1310,7 +1320,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
         try { a.volume = fadeLevel(k); } catch (_) {}
         if (k <= 0) done();
       }, 50);
-      fadeCopy(src, a, left, f).then((ok) => { if (ok && !f.cancel) done(); });
+      fadeCopy(src, a, left, f).then((how) => {
+        if (how === "copy" && !f.cancel) done();
+        diag({ kind: "fade", src: src.split("/").pop(), how, audio: actx ? actx.state : "none" });
+      });
     }
   }
   async function fadeCopy(src, a, left, f) {
@@ -1322,15 +1335,24 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       if (actx && actx.state !== "running") {
         await Promise.race([actx.resume().catch(() => {}), new Promise((ok) => setTimeout(ok, 300))]);
       }
-      if (!fb || !actx || actx.state !== "running") return false;
+      if (!fb) return "volume:no-frame-size";
+      if (!actx || actx.state !== "running") return "volume:audio-" + (actx ? actx.state : "none");
+      const decode = (bytes) => new Promise((ok, no) => actx.decodeAudioData(bytes, ok, no));
       const first = Math.max(0, Math.floor(a.currentTime / FRAME_S) - 3); // a few frames early: the decoder needs them to settle
       const from = first * fb, to = from + Math.ceil((FADE6_S + 2) / FRAME_S) * fb - 1;
-      const r = await fetch(src, { headers: { Range: `bytes=${from}-${to}` } });
-      if (r.status !== 206) return false;
-      const bytes = await r.arrayBuffer();
-      const buf = await new Promise((ok, no) => actx.decodeAudioData(bytes, ok, no));
-      const rest = left(), at = a.currentTime - first * FRAME_S; // where the element is now, inside the fetched piece
-      if (f.cancel || a.paused || rest <= 0 || at < 0 || at >= buf.duration) return false;
+      let buf = null, base = first * FRAME_S, how = "copy";
+      try {
+        const r = await fetch(src, { headers: { Range: `bytes=${from}-${to}` } });
+        if (r.status !== 206) throw new Error("range " + r.status);
+        buf = await decode(await r.arrayBuffer());
+      } catch (_) {
+        // some phones can't decode a piece cut from the middle of an MP3: decode the whole file (the speech element
+        // already downloaded it, so it comes from the cache) and play the copy from where the element is
+        try { buf = await decode(await (await fetch(src)).arrayBuffer()); base = 0; how = "copy"; } catch (e) { return "volume:decode-failed"; }
+      }
+      const rest = left(), at = a.currentTime - base; // where the element is now, inside the decoded audio
+      if (f.cancel || a.paused) return "cancelled";
+      if (rest <= 0 || at < 0 || at >= buf.duration) return "volume:too-late";
       const node = actx.createBufferSource(), gain = actx.createGain(), t = actx.currentTime;
       node.buffer = buf;
       const x0 = Math.min(1, rest / FADE6_S), curve = new Float32Array(64);
@@ -1340,8 +1362,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       node.start(t, at);
       node.stop(t + rest + 0.05);
       f.node = node;
-      return true;
-    } catch (_) { return false; }
+      return how;
+    } catch (e) { return "volume:error"; }
   }
 
   // A silent 0.1 s WAV (8 kHz, 8-bit; 128 = zero level), made here so no extra file is needed.
@@ -1492,6 +1514,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       if (!actx) { const C = window.AudioContext || window.webkitAudioContext; if (C) actx = new C(); }
       // iPhones also use "interrupted" (screen off, idle, a call), not only "suspended": wake it from either
       if (actx && actx.state !== "running") actx.resume().catch(() => {});
+      if (actx && !actx._keepAlive) {
+        // an iPhone puts a Web Audio that plays nothing to sleep, and only a tap wakes it again: then the MUTE fade
+        // (which plays through Web Audio) was skipped and the speech cut off. A silent loop keeps it awake.
+        const keep = actx.createBufferSource();
+        keep.buffer = actx.createBuffer(1, actx.sampleRate, actx.sampleRate); // 1 s of silence
+        keep.loop = true;
+        keep.connect(actx.destination);
+        keep.start();
+        actx._keepAlive = keep;
+      }
     } catch (_) {}
   };
   for (const ev of ["pointerdown", "touchend", "click"]) addEventListener(ev, wakeAudio, true); // only a tap may start it
