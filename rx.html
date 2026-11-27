@@ -1178,8 +1178,15 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // receive each other's presses. The /split preview never sends.
   const PRESS_URL = "https://qatrsegoqwandtsasunp.supabase.co/realtime/v1/api/broadcast";
   const PRESS_KEY = "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3";
+  // web J / K / M (9 / 10 / 12, cue 7~9): only the shape /tx allows reaches TouchDesigner, the same phones that
+  // sound, so a phone of another shape can't change the visual. The release goes out only if the press did.
+  const TD_SHAPE_GATED = [9, 10, 12];
+  let pressSent = false;
   const sendPress = (s) => {
     if (window.rxAdmin || !number) return;
+    if (s) pressSent = !(raw && TD_SHAPE_GATED.includes(raw.mode) && !shapeOpen(number));
+    if (!pressSent) return;
+    if (!s) pressSent = false;
     const payload = { n: window.rxShown(number), s, m: raw ? raw.mode : null, t: Math.round(Date.now() + offset) };
     fetch(PRESS_URL, {
       method: "POST", keepalive: true,
