@@ -1180,8 +1180,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const PRESS_KEY = "sb_publishable_9f9-AydwUAdKgQ9UuQl83Q_flyWWDL3";
   // web J / K / M (9 / 10 / 12, cue 7~9): only the shape /tx allows reaches TouchDesigner, the same phones that
   // sound, so a phone of another shape can't change the visual. The release goes out only if the press did.
-  const TD_SHAPE_GATED = [9, 10, 12];
-  const TD_OFF = [20]; // web U (도레미파솔, 터디 연동 없음): same as S on the phone, but nothing goes to TouchDesigner
+  const TD_SHAPE_GATED = [9, 10];
+  const TD_OFF = [12, 20]; // web M (shape picking for sound only) and U: no visual, nothing goes to TouchDesigner
   let pressSent = false;
   const sendPress = (s) => {
     if (window.rxAdmin || !number) return;
@@ -1676,7 +1676,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // every held-note mode keeps its voice (7 only while the number is open): 17 / 20 / 21 (도레미파솔), 18 (P 단음)
     const holdMode = m === 17 || m === 18 || m === 20 || m === 21 || (m === 7 && number && mode7Open(number));
     if (!holdMode && holdVoice7) stopHold7(true);
-    if (m === 20 && holdVoice7 && number && !shapeOpen(number)) stopHold7(false); // /tx moved on to another shape
+    if (m === 20 && holdVoice7 && number && !shapeOpen(number)) stopHold7(false); // /tx moved on to another shape (M, R)
     if (m !== 12 && holdVoice12) stopHold12(true);
     if (m === 12 && holdVoice12 && holdVoice12.audio) {
       const k = fade12Level();
@@ -1834,7 +1834,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   });
   document.addEventListener("rx-down", () => {
     const mode = state ? state.mode : 1;
-    if (mode === 20 && number && !shapeOpen(number)) return; // not this shape's turn (L, inner 12, has no shape picking)
+    if (mode === 20 && number && !shapeOpen(number)) return; // M, R: not this shape's turn (L has no shape picking)
     if (mode === 7 && number && mode7Open(number)) startHold7(loopSrc(NOTE_OF[number]));
     else if (mode === 18 && number) startHold7(loopSrc(NOTE_OF[number])); // web 15 (P 단음): the note sounds only while held, short or long
     else if ((mode === 17 || mode === 20 || mode === 21) && number) startHold7(doremiSrc(number)); // web 12, 17, 18: 도레미파솔 while held
