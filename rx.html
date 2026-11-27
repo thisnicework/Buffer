@@ -1710,7 +1710,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     "seryeong","jimin","seungyoung","min","seungyoung","bom","sua","jiwon","sua","seunghwan",
     "jimin","seonyul","bom","min","seonyul","sua","seunghwan","bom","jimin","jiwon",
     "min","seungyoung","seryeong","seungyoung","seonyul","seunghwan","jiwon","sua","seryeong","min"];
-  const mainSrc = () => (number ? `/assets/rx/mode8-${MAIN_OF[number]}.mp3` : null); // no number chosen: silent
+  for (let n = 41; n <= 80; n++) MAIN_OF[n] = MAIN_OF[n - 40]; // seats 41~80 repeat 1~40 (it used to ask for mode8-undefined.mp3)
+  const mainSrc = () => (number && MAIN_OF[number] ? `/assets/rx/mode8-${MAIN_OF[number]}.mp3` : null); // no number chosen: silent
   const mainPlayers = {};
   let nowMain = null;
   function mainPlayer(src) {
