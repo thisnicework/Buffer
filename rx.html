@@ -1276,6 +1276,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // element is (the files are constant bitrate, 48 kHz, 24 ms frames, so time -> byte is exact), on a gain ramp;
   // the element is paused the moment that copy takes over. Where audio.volume works it is also turned down meanwhile.
   const FADE6_S = 3, FRAME_S = 0.024;
+  // Loudness is heard on a log scale: a straight 1 -> 0 volume line sounds unchanged until the very end and then
+  // drops ("3초 그대로다 뚝"). So the level follows x^3 of the time left (x = 1 -> 0): -10 dB a third of the way in,
+  // -18 dB halfway, then gently to silence.
+  const fadeLevel = (x) => Math.pow(Math.max(0, Math.min(1, x)), 3);
   const FRAME_BYTES = { [TRACKS[2].src]: 384 }; // 128 kbps announcement
   for (const src of Object.values(VOICE)) FRAME_BYTES[src] = 288; // 96 kbps voices
   let fades = [];
@@ -1295,7 +1299,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       f.ramp = setInterval(() => {
         if (f.cancel) return clearInterval(f.ramp);
         const k = Math.max(0, Math.min(1, left() / FADE6_S));
-        try { a.volume = k; } catch (_) {}
+        try { a.volume = fadeLevel(k); } catch (_) {}
         if (k <= 0) done();
       }, 50);
       fadeCopy(src, a, left, f).then((ok) => { if (ok && !f.cancel) done(); });
@@ -1305,6 +1309,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     try {
       wakeAudio();
       const fb = FRAME_BYTES[src];
+      // a phone often has its Web Audio asleep by now (nothing played through it for a while): it was asked to
+      // wake just above, but that takes a moment, so wait for it (up to 0.3 s) instead of giving up at once
+      if (actx && actx.state !== "running") {
+        await Promise.race([actx.resume().catch(() => {}), new Promise((ok) => setTimeout(ok, 300))]);
+      }
       if (!fb || !actx || actx.state !== "running") return false;
       const first = Math.max(0, Math.floor(a.currentTime / FRAME_S) - 3); // a few frames early: the decoder needs them to settle
       const from = first * fb, to = from + Math.ceil((FADE6_S + 2) / FRAME_S) * fb - 1;
@@ -1316,8 +1325,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       if (f.cancel || a.paused || rest <= 0 || at < 0 || at >= buf.duration) return false;
       const node = actx.createBufferSource(), gain = actx.createGain(), t = actx.currentTime;
       node.buffer = buf;
-      gain.gain.setValueAtTime(Math.min(1, rest / FADE6_S), t);
-      gain.gain.linearRampToValueAtTime(0, t + rest);
+      const x0 = Math.min(1, rest / FADE6_S), curve = new Float32Array(64);
+      for (let i = 0; i < 64; i++) curve[i] = fadeLevel(x0 * (1 - i / 63)); // same x^3 shape, from where it is now
+      gain.gain.setValueCurveAtTime(curve, t, rest);
       node.connect(gain).connect(actx.destination);
       node.start(t, at);
       node.stop(t + rest + 0.05);
