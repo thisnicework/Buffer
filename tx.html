@@ -326,7 +326,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   function renderRemoved() {
     const inList = new Set(draft());
     const gone = MODES.filter((m) => !inList.has(m.n));
-    $("removed").hidden = !gone.length;
+    $("removed").hidden = true; // the 삭제한 모드 list is no longer shown
     $("removed-list").innerHTML = gone.map((m) => `<button type="button" data-n="${m.n}" aria-label="${L(m.n)} 다시 넣기"><b>${L(m.n)}</b>${m.d} ＋</button>`).join("");
     for (const b of cue.querySelectorAll(".del")) b.disabled = saving || cue.children.length <= 1; // keep at least one
   }
