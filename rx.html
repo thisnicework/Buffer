@@ -228,6 +228,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .picker-done{background:#1C1C1E;border-top-color:#38383A}
 .picker-wheel li.taken{color:#55575C}
 .picker-done:disabled{color:#636366}
+/* entry notice: shown on every visit until 확인 is tapped (that tap also lets the phone play sound) */
+.notice{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:0 16px;background:rgba(0,0,0,.6);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.notice[hidden]{display:none}
+.notice-card{width:100%;max-width:300px;border-radius:14px;background:#1C1C1E;color:#F2F2F7;text-align:center;overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.6);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;letter-spacing:-.03em}
+.notice-text{margin:0;padding:22px 18px 20px;font-size:16px;line-height:1.55;font-weight:500}
+.notice-ok{display:block;width:100%;padding:14px 0;border:0;border-top:1px solid #38383A;background:none;color:#F2F2F7;font:inherit;font-size:17px;font-weight:600;letter-spacing:inherit;cursor:pointer}
+.notice-ok:active{background:#2C2C2E}
+.notice-ok:focus-visible{outline:2px solid #F2F2F7;outline-offset:-4px}
 </style>
 </head>
 <body>
@@ -407,6 +415,23 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     <button type="button" class="picker-done" id="picker-done">완료</button>
   </div>
 </div>
+<div class="notice" id="notice" role="dialog" aria-modal="true" aria-labelledby="notice-text">
+  <div class="notice-card">
+    <p class="notice-text" id="notice-text">화면을 한 번 터치해주세요.<br>볼륨은 반 이상을 유지해주세요.</p>
+    <button type="button" class="notice-ok" id="notice-ok">확인</button>
+  </div>
+</div>
+<script>
+// entry notice: only 확인 closes it. Tapping 확인 is the tap the phone needs before the page may play sound
+// (the audio unlock listens for any tap on the page). Not on the /split operator preview.
+(() => {
+  const box = document.getElementById("notice");
+  if (new URLSearchParams(location.search).has("split")) { box.hidden = true; return; }
+  const ok = document.getElementById("notice-ok");
+  ok.addEventListener("click", () => { box.hidden = true; });
+  ok.focus();
+})();
+</script>
 <script>
 // number picker: tap the trigger, a wheel drops down; scroll (snaps to rows) or tap a row to choose.
 // Numbers are one-per-phone: ones other people hold are greyed out live and can't be confirmed.
