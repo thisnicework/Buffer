@@ -1337,10 +1337,42 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   };
   let nowNote = null;
   const sounding = (a) => a && !a.paused && !a.ended;
+  // Button sounds play through Web Audio once the file is decoded: an iPhone lets an <audio> element sound only
+  // after it was started from inside a tap once, so a mode's new files (after /tx switched) stayed silent until a
+  // reload. Web Audio, once woken by any tap, plays every decoded file. <audio> stays only as the fallback while a
+  // file is still loading. One voice per slot ("note": notes / melodies, "main": main sound / 띵동).
+  const shots = {};
+  const shotSounding = (slot) => !!shots[slot] && performance.now() < shots[slot].endAt;
+  function stopShot(slot) {
+    const v = shots[slot];
+    shots[slot] = null;
+    if (v) { try { v.node.stop(); } catch (_) {} }
+  }
+  // true when it went through Web Audio (or was ignored because the same sound is still playing)
+  function playShot(slot, src, restartOnPress) {
+    const b = ready[src];
+    if (!b || !actx || actx.state === "closed") { loadBuf(src); return false; }
+    if (shotSounding(slot)) {
+      if (shots[slot].src === src && !restartOnPress) return true;
+      stopShot(slot);
+    }
+    try {
+      const node = actx.createBufferSource();
+      node.buffer = b;
+      node.connect(actx.destination);
+      node.start(); // if the phone is still waking its audio, this plays the moment it is running
+      shots[slot] = { node, src, endAt: performance.now() + b.duration * 1000 };
+      return true;
+    } catch (_) { return false; }
+  }
   function playSrc(src, restartOnPress = false) {
-    const next = notePlayer(src);
     stopHold7(true);
     stopHold12(true);
+    wakeAudio();
+    if (sounding(nowNote) && ready[src]) nowNote.pause();
+    if (playShot("note", src, restartOnPress)) return;
+    const next = notePlayer(src);
+    if (shotSounding("note")) { if (shots.note.src === src && !restartOnPress) return; stopShot("note"); }
     if (sounding(nowNote)) {
       if (nowNote === next && !restartOnPress) return;
       nowNote.pause();
@@ -1461,9 +1493,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   function startHold7(src) {
     stopHold7(true);
     if (sounding(nowNote)) nowNote.pause();
+    stopShot("note");
     wakeAudio();
     const b = ready[src];
-    if (b && actx && actx.state === "running") {
+    if (b && actx && actx.state !== "closed") {
       const node = actx.createBufferSource();
       const gain = actx.createGain();
       const t = actx.currentTime;
@@ -1518,11 +1551,12 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (k <= 0) return; // past 25s: silent
     stopHold12(true);
     if (sounding(nowNote)) nowNote.pause();
+    stopShot("note");
     wakeAudio();
     const src = `/assets/rx/mode12-loop-${note}.mp3`;
     const b = ready[src];
     const now = Date.now() + offset;
-    if (b && actx && actx.state === "running") {
+    if (b && actx && actx.state !== "closed") {
       const node = actx.createBufferSource();
       const gain = actx.createGain();
       const t = actx.currentTime;
@@ -1604,6 +1638,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   function playMain() {
     const src = mainSrc();
     if (!src) return;
+    wakeAudio();
+    if (playShot("main", src, false)) { if (sounding(nowMain)) nowMain.pause(); return; }
     const next = mainPlayer(src);
     if (sounding(nowMain)) { if (nowMain === next) return; nowMain.pause(); }
     nowMain = next;
@@ -1613,6 +1649,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // Mode 14: a press plays the 띵동 (띵동 변조 2.wav), same for everyone; presses during it are ignored.
   const DINGDONG = "/assets/rx/mode9-dingdong.mp3";
   function playDingdong() {
+    wakeAudio();
+    if (playShot("main", DINGDONG, false)) { if (sounding(nowMain)) nowMain.pause(); return; }
     const next = mainPlayer(DINGDONG);
     if (sounding(nowMain)) { if (nowMain === next) return; nowMain.pause(); }
     nowMain = next;
@@ -1624,6 +1662,17 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (mode === 13) { const src = mainSrc(); if (src) mainPlayer(src); } // start downloading this phone's sound
     else if (mode === 14) mainPlayer(DINGDONG);
     if (nowMain && mode !== 13 && mode !== 14) { nowMain.pause(); nowMain = null; } // leaving these modes silences it
+    if (mode !== 13 && mode !== 14 && shotSounding("main")) stopShot("main");
+    // decode this phone's button sounds ahead of time (once the audio exists), so a press after /tx switches a mode
+    // plays at once through Web Audio. Each file is fetched and decoded once.
+    if (actx && number) {
+      const note = NOTE_OF[number];
+      for (const src of [
+        note && `/assets/rx/mode67-note-${note}.mp3`, note && `/assets/rx/mode10-hold-${note}.mp3`,
+        note && `/assets/rx/mode12-loop-${note}.mp3`, MELODY_OF[number] && `/assets/rx/mode11-melody-${MELODY_OF[number]}.mp3`,
+        DOREMI_OF[number] && doremiSrc(number), mainSrc(), DINGDONG,
+      ]) if (src) loadBuf(src);
+    }
   }
   setInterval(syncMain, 500);
 
