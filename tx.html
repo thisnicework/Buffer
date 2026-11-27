@@ -502,7 +502,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   const LABELS7 = [...STEP7.map((n) => String(n).padStart(2, "0")), "전체"];
   $("step7-nums").innerHTML = LABELS7.map((t, i) => `<button type="button" data-bit="${i}" aria-pressed="false">${t}</button>`).join("");
   // shape modes: which shape sounds now (same bits as mode 7: 0~4 = ○ △ □ ☆ ✕, 32 = 전체); one at a time
-  const SHAPE_MODES = [9, 10, 11, 12, 14, 16, 17];
+  const SHAPE_MODES = [9, 10, 12, 14, 16, 17]; // L (11) has no shape picking: every phone holds its note
   const SHAPE_LABELS = ["○", "△", "□", "☆", "✕", "전체"];
   $("shape-btns").innerHTML = SHAPE_LABELS.map((t, i) => `<button type="button" data-bit="${i}" aria-pressed="false">${t}</button>`).join("");
   function renderShapes() {
