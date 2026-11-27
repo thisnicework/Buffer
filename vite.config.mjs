@@ -20,7 +20,7 @@ export default defineConfig({
         main: path.resolve(import.meta.dirname, "index.html"),
         admin: path.resolve(import.meta.dirname, "admin.html"),
         rx: path.resolve(import.meta.dirname, "rx.html"),
-        tx: path.resolve(import.meta.dirname, "tx.html"),
+        kimochi: path.resolve(import.meta.dirname, "kimochi.html"), // operator console (was /tx)
         split: path.resolve(import.meta.dirname, "split.html"),
       },
     },

@@ -999,7 +999,7 @@ function serveStatic(req, res, url) {
   if (p === "/") p = "/index.html";
   if (p === "/admin") p = "/admin.html";
   if (p === "/rx") p = "/rx.html";
-  if (p === "/tx") p = "/tx.html";
+  if (p === "/kimochi") p = "/kimochi.html";
   if (p === "/split") p = "/split.html";
 
   if (isForbiddenPath(p)) return send(res, 403, "Forbidden");
@@ -1055,10 +1055,15 @@ async function startServer() {
       if (url.pathname.startsWith("/api/")) return await api(req, res, url);
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
 
+      // the operator console moved from /tx to /kimochi: old links and bookmarks still land there
+      if (url.pathname === "/tx" || url.pathname === "/tx.html") {
+        res.writeHead(302, { Location: "/kimochi" + url.search });
+        return res.end();
+      }
       if (vite) {
         if (url.pathname === "/admin") req.url = "/admin.html" + url.search;
         if (url.pathname === "/rx") req.url = "/rx.html" + url.search;
-        if (url.pathname === "/tx") req.url = "/tx.html" + url.search;
+        if (url.pathname === "/kimochi") req.url = "/kimochi.html" + url.search;
         if (url.pathname === "/split") req.url = "/split.html" + url.search;
         return vite.middlewares(req, res, () => serveStatic(req, res, url));
       }
@@ -1120,7 +1125,7 @@ async function startServer() {
 
   ➜  예매 페이지:    http://localhost:${PORT}/
   ➜  관리자 페이지:  http://localhost:${PORT}/admin
-  ➜  공연 송출(TX):  http://localhost:${PORT}/tx
+  ➜  공연 송출(TX):  http://localhost:${PORT}/kimochi
   ➜  관객 화면(RX):  http://localhost:${PORT}/rx
   ➜  분할 리허설:    http://localhost:${PORT}/split
   ➜  프론트엔드:      ${viteText}
