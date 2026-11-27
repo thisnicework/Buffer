@@ -91,17 +91,17 @@ sqliteDb.exec(`
     updated_at       TEXT    NOT NULL
   );
   CREATE TABLE IF NOT EXISTS show_claims (
-    num        INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 45),
+    num        INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 80),
     client_id  TEXT    NOT NULL UNIQUE,
     updated_at TEXT    NOT NULL
   );
 `);
-// audience numbers went from 1~40 to 1~45: rebuild an older local table so 41~45 pass its CHECK (claims are per show anyway)
+// audience numbers went from 1~40 / 1~45 to 1~80: rebuild an older local table so the new seats pass its CHECK (claims are per show anyway)
 {
   const t = sqliteDb.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'show_claims'").get();
-  if (t && /BETWEEN 1 AND 40\b/.test(t.sql)) {
+  if (t && /BETWEEN 1 AND (40|45)\b/.test(t.sql)) {
     sqliteDb.exec(`DROP TABLE show_claims;
-      CREATE TABLE show_claims (num INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 45), client_id TEXT NOT NULL UNIQUE, updated_at TEXT NOT NULL);`);
+      CREATE TABLE show_claims (num INTEGER PRIMARY KEY CHECK (num BETWEEN 1 AND 80), client_id TEXT NOT NULL UNIQUE, updated_at TEXT NOT NULL);`);
   }
 }
 sqliteDb.prepare("INSERT OR IGNORE INTO show_state (id, mode, timer_started_at, updated_at) VALUES (1, 1, NULL, ?)").run(new Date().toISOString());
@@ -343,7 +343,7 @@ async function dbAdminDelete(code) {
 }
 
 // ---- DEVICE 공연 상태 & 관객 개인번호 1~45 (/tx 가 바꾸고 /rx 가 따라감) ----
-const NUM_MAX = 45; // 관객 개인번호 최대값 (Supabase show_claims 의 CHECK 와 claim_show_number 도 같은 값: supabase-schema.sql)
+const NUM_MAX = 80; // 관객 개인번호 최대값 (Supabase show_claims 의 CHECK 와 claim_show_number 도 같은 값: supabase-schema.sql)
 // Supabase show_state / show_claims 가 원본. 테이블이 아직 없거나 SHOW_STATE=local 이면 로컬 SQLite 로 폴백 동작
 const TIMER_SECONDS = 700;
 const SHOW_SECRET = ADMIN_TOKEN || "admin1234";

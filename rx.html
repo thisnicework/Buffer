@@ -411,16 +411,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 // number picker: tap the trigger, a wheel drops down; scroll (snaps to rows) or tap a row to choose.
 // Numbers are one-per-phone: ones other people hold are greyed out live and can't be confirmed.
 (() => {
-  const ROW = 36, MAX = 45;
+  const ROW = 36, MAX = 80;
   // /rx?split (only the /split page uses it): operator preview. Any 01~45 can be picked to see/hear what that
   // number gets. Nothing is claimed on the server, so it never takes a seat from the audience.
   // The old /rx?admin address is gone: it now opens as an ordinary audience phone.
   const ADMIN = new URLSearchParams(location.search).has("split");
   window.rxAdmin = ADMIN;
-  // Web phones carry the EVEN numbers (the LaNA boards carry the odd ones): the server still hands out seats
-  // 1~45 first come, first served (sounds/shapes/notes are looked up by seat), but every phone shows and sends
-  // seat × 2 = 02, 04 … 90 (OLED, picker and the presses TouchDesigner gets).
-  const SHOWN = window.rxShown = (seat) => seat * 2;
+  // Web phones carry 81~160 (the LaNA boards carry 1~80): the server hands out seats 1~80 first come, first
+  // served (sounds/shapes/notes are looked up by seat), and every phone shows and sends seat + 80 = 81 … 160
+  // (OLED, picker and the presses TouchDesigner gets).
+  const SHOWN = window.rxShown = (seat) => seat + 80;
   const root = document.getElementById("picker");
   const trigger = document.getElementById("picker-trigger");
   const label = document.getElementById("picker-value");
@@ -846,6 +846,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     "D","Bb","D","Eb","G","C","Eb","Bb","D","Bb",
     "D","G","Bb","D","Eb","Bb","Eb","C","Eb","C",
     "D","G","Eb","Bb","C"]; // 41~45: one of each note, none next to the same note
+  for (let n = 46; n <= 80; n++) NOTE_OF[n] = NOTE_OF[n - 45]; // 46~80 repeat 1~35 (45 C, 46 G: no clash)
   const SHAPE_FOR_NOTE = { C: "○", D: "△", Eb: "□", G: "☆", Bb: "✕" };
   const SHAPE_OF = NOTE_OF.map((n) => (n ? SHAPE_FOR_NOTE[n] : null));
   // Web mode 12: the same shape per number, sounding 도 레 미 파 솔 (C4~G4) instead: ○ 도, △ 레, □ 미, ☆ 파, ✕ 솔
@@ -880,7 +881,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
     // single-line modes fill the panel edge to edge (see fitText); no number yet: the panel stays dark
-    const num = number ? String(window.rxShown(number)).padStart(2, "0") : ""; // seat 1 -> 02 … seat 45 -> 90 (web = even)
+    const num = number ? String(window.rxShown(number)).padStart(2, "0") : ""; // seat 1 -> 81 … seat 80 -> 160
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
     if (mode === 0) html = LOGO; // before the show: the logo, the same on every phone (no number needed)
     else if (mode === 17) html = number ? `<span class="oled-line"><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${DOREMI_OF[number]}</span></span>` : ""; // web 12 (M): shape / C~G (도~솔), no number

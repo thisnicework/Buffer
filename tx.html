@@ -595,7 +595,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   async function refreshClaims() {
     try {
       const j = await (await fetch("/api/claims", { cache: "no-store" })).json();
-      $("seats-count").textContent = `${j.taken.length} / 45 선택됨`;
+      $("seats-count").textContent = `${j.taken.length} / 80 선택됨`;
       if (typeof j.pickMode === "boolean") renderPick(j.pickMode);
     } catch (_) {}
   }
@@ -644,7 +644,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || j.error || "서버 응답 " + r.status);
       const back = await (await fetch("/api/claims", { cache: "no-store" })).json();
-      $("seats-count").textContent = `${back.taken.length} / 45 선택됨`;
+      $("seats-count").textContent = `${back.taken.length} / 80 선택됨`;
       if (back.taken.length) throw new Error(`아직 ${back.taken.length}개 번호가 남아 있어요`);
       seatMsg("관객 번호 전체 초기화 완료");
     } catch (e) { seatMsg("초기화 실패 · " + e.message, true); }
