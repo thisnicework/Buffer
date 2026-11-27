@@ -235,6 +235,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
 .notice-text{margin:0;padding:22px 18px 20px;font-size:16px;line-height:1.55;font-weight:500}
 .notice-ok{display:block;width:100%;padding:14px 0;border:0;border-top:1px solid #38383A;background:none;color:#F2F2F7;font:inherit;font-size:17px;font-weight:600;letter-spacing:inherit;cursor:pointer}
 .notice-ok:active{background:#2C2C2E}
+.resume{cursor:pointer} /* after the screen was off: a tap anywhere continues */
+.resume .notice-text{padding:22px 18px}
 .notice-ok:focus,.notice-ok:focus-visible{outline:none}
 </style>
 </head>
@@ -414,6 +416,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     </div>
     <button type="button" class="picker-done" id="picker-done">완료</button>
   </div>
+</div>
+<div class="notice resume" id="resume" role="dialog" aria-modal="true" aria-labelledby="resume-text" hidden>
+  <div class="notice-card"><p class="notice-text" id="resume-text">계속하려면 터치하세요.</p></div>
 </div>
 <div class="notice" id="notice" role="dialog" aria-modal="true" aria-labelledby="notice-text">
   <div class="notice-card">
@@ -1065,8 +1070,9 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (typeof pick === "boolean") { pickOn = pick; window.rxPicker.setPickMode(pick); }
     if (window.rxAdmin) { window.rxPicker.setTaken(taken, number); return; } // preview: never claims, keeps the picked number
     if (mine !== undefined && mine !== number) { number = mine; window.rxPicker.setCommitted(mine); paint(); syncAnnouncement(); } // undefined = keep ours
+    if (mine !== undefined) { try { localStorage.setItem("rx-number", mine ? String(mine) : ""); } catch (_) {} }
     window.rxPicker.setTaken(taken, number);
-    if (!number && pickOn === false && taken.length < 45) autoClaim(); // no number yet (first visit, or /tx reset them all): take the next one
+    if (!number && pickOn === false && taken.length < 80) autoClaim(); // no number yet (first visit, or /tx reset them all): take the next one
   };
 
   // First come, first served: the server hands this phone the lowest free number (1, 2, 3 … 40).
@@ -1110,9 +1116,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   if (window.rxAdmin) { // preview starts on the last number looked at (01 the first time)
     let n = 1;
     try { n = Number(localStorage.getItem("rx-admin-number")) || 1; } catch (_) {}
-    if (!window.rxNumberOk(n)) n = Math.max(1, Math.min(45, n)); // 1~45
+    if (!window.rxNumberOk(n)) n = Math.max(1, Math.min(80, n)); // 1~80
     window.rxPicker.setCommitted(n);
     number = n; // the sound setup below isn't defined yet; it picks this number up when the state arrives
+  }
+  if (!window.rxAdmin) { // the number this phone had (kept on the phone), until the server answers
+    let n = 0;
+    try { n = Number(localStorage.getItem("rx-number")) || 0; } catch (_) {}
+    if (window.rxNumberOk(n)) { number = n; window.rxPicker.setCommitted(n); }
   }
   pullClaims();
   setInterval(paint, 200);
@@ -1194,6 +1205,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   const VOICE5_OF = [null,
     4,7,1,6,2,4,7,5,2,6, 1,5,3,6,1,3,4,7,5,6, 4,7,2,3,5,7,3,4,6,3,
     1,2,6,4,2,3,7,5,4,1, 2,6,5,1,7];
+  for (let n = 46; n <= 80; n++) { VOICE4_OF[n] = VOICE4_OF[n - 42]; VOICE5_OF[n] = VOICE5_OF[n - 42]; } // 46~80 = 4~38
   const TRACKS = {
     // mode 2 starts the moment /tx switches (a phone that hears of it ~0.1~0.3 s later joins at that point);
     // modes 4 and 5 switch the panel at once but their voices start 2 s after the switch
@@ -1415,7 +1427,12 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     }
     nowNote = next;
     try { nowNote.loop = false; nowNote.volume = 1; nowNote.currentTime = 0; } catch (_) {}
-    nowNote.play().catch(() => {});
+    // An iPhone refuses an <audio> element that was never started inside a tap: then wait for the file to decode
+    // and play it through Web Audio instead (if that happens within 1.5 s of the press), rather than staying silent.
+    const pressedAt = Date.now();
+    nowNote.play().catch(() => {
+      loadBuf(src).then(() => { if (Date.now() - pressedAt < 1500) playShot("note", src, restartOnPress); });
+    });
   }
   // Short note (web mode 9, here 8): one press plays the note once; presses while it still sounds are ignored
   // (same as the melody in web mode 10), so mashing the button can't re-trigger it
@@ -1559,13 +1576,15 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     }
     loadBuf(src);
     const a = notePlayer(src);
+    const v = { audio: a };
     try {
       a.volume = 1;
       a.currentTime = 0;
       a.loop = true;
-      a.play().catch(() => {});
+      // refused (iPhone, element never started in a tap): once decoded, hold through Web Audio if still held
+      a.play().catch(() => { loadBuf(src).then((b) => { if (b && holdVoice7 === v) startHold7(src); }); });
     } catch (_) {}
-    holdVoice7 = { audio: a };
+    holdVoice7 = v;
   }
 
   // Mode 12: hold to sustain continuously; volume follows the 15s hold -> 10s fadeout curve
@@ -1623,13 +1642,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     }
     loadBuf(src);
     const a = notePlayer(src);
+    const v = { audio: a };
     try {
       a.volume = k;
       a.currentTime = 0;
       a.loop = true;
-      a.play().catch(() => {});
+      a.play().catch(() => { loadBuf(src).then((b) => { if (b && holdVoice12 === v) startHold12(note); }); }); // see startHold7
     } catch (_) {}
-    holdVoice12 = { audio: a };
+    holdVoice12 = v;
   }
 
   // stop mode 7 / 12 voices if leaving mode or closed, or adjust HTML5 audio fallback volume
@@ -1689,7 +1709,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (sounding(nowMain)) { if (nowMain === next) return; nowMain.pause(); }
     nowMain = next;
     try { nowMain.currentTime = 0; } catch (_) {}
-    nowMain.play().catch(() => {});
+    const at = Date.now(), want = new URL(nowMain.src).pathname; // refused (iPhone): play it through Web Audio once decoded, see playSrc
+    nowMain.play().catch(() => { loadBuf(want).then(() => { if (Date.now() - at < 1500) playShot("main", want, false); }); });
   }
   // Mode 14: a press plays the 띵동 (띵동 변조 2.wav), same for everyone; presses during it are ignored.
   const DINGDONG = "/assets/rx/mode9-dingdong.mp3";
@@ -1700,7 +1721,8 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (sounding(nowMain)) { if (nowMain === next) return; nowMain.pause(); }
     nowMain = next;
     try { nowMain.currentTime = 0; } catch (_) {}
-    nowMain.play().catch(() => {});
+    const at = Date.now(), want = new URL(nowMain.src).pathname; // refused (iPhone): play it through Web Audio once decoded, see playSrc
+    nowMain.play().catch(() => { loadBuf(want).then(() => { if (Date.now() - at < 1500) playShot("main", want, false); }); });
   }
   function syncMain() {
     const mode = state ? state.mode : 1;
@@ -1823,9 +1845,16 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // tap that lets the speech elements play, so the 안내 멘트 then stayed silent. Instead: the next tap throws the
   // old Web Audio away and builds a fresh one inside that tap (decoded sounds are kept), and unlocks the speech
   // elements again. Elements the phone still allows keep playing straight away.
+  // A "계속하려면 터치하세요" screen covers the page until that tap, so the tap that wakes the sound is never a
+  // button press that would have gone silent (not on the /split preview, nor over the entry notice).
+  const resume = document.getElementById("resume");
+  const closeResume = () => { resume.hidden = true; };
+  resume.addEventListener("pointerup", closeResume);
+  resume.addEventListener("click", closeResume);
   const comeBack = () => {
     audioStale = true;
     addEventListener("pointerdown", unlock);
+    if (!window.rxAdmin && document.getElementById("notice").hidden) resume.hidden = false;
     pull(); pullClaims();
   };
   document.addEventListener("visibilitychange", () => { if (document.hidden) silenceAll(); else comeBack(); });
