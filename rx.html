@@ -892,7 +892,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
   // 11 (melody) / 12 (hold).
   // Web 12 (number + shape + 도레미파솔, hold to sustain) is 17 here; web 13 (built-in LEDs blink 5 times) is 15.
-  const INNER_MODE = { 8: 14, 9: 19, 10: 11, 11: 12, 12: 20, 13: 15, 14: 8, 15: 18, 16: 19, 17: 20, 18: 21, 19: 6 }; // web 14 = web 9 again (number + shape + note)
+  const INNER_MODE = { 8: 14, 9: 19, 10: 11, 11: 12, 12: 20, 13: 15, 14: 8, 15: 18, 16: 19, 17: 20, 18: 21, 19: 6, 20: 21 }; // web 14 = web 9 again (number + shape + note)
   // web 15 (음계만) is 18 here: the note name alone on the panel, the same short note as web 9 on press
   // web 16 (도형+음계) is 19: shape / note name, short note on press. Web 9 (J) uses it too now (no number);
   // web 14 (O, → 터디) keeps 8 (number + shape + note)
@@ -1181,10 +1181,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // web J / K / M (9 / 10 / 12, cue 7~9): only the shape /tx allows reaches TouchDesigner, the same phones that
   // sound, so a phone of another shape can't change the visual. The release goes out only if the press did.
   const TD_SHAPE_GATED = [9, 10, 12];
+  const TD_OFF = [20]; // web U (도레미파솔, 터디 연동 없음): same as S on the phone, but nothing goes to TouchDesigner
   let pressSent = false;
   const sendPress = (s) => {
     if (window.rxAdmin || !number) return;
-    if (s) pressSent = !(raw && TD_SHAPE_GATED.includes(raw.mode) && !shapeOpen(number));
+    if (s) pressSent = !(raw && (TD_OFF.includes(raw.mode) || (TD_SHAPE_GATED.includes(raw.mode) && !shapeOpen(number))));
     if (!pressSent) return;
     if (!s) pressSent = false;
     const payload = { n: window.rxShown(number), s, m: raw ? raw.mode : null, t: Math.round(Date.now() + offset) };

@@ -237,6 +237,7 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 17, d: "도형+도레미파솔 (번호 없이)" },
     { n: 18, d: "도레미파솔 (도~솔 이름만)" },
     { n: 19, d: "미아찾기 (신호 끊긴 디바이스가 띠 띠 띠)" },
+    { n: 20, d: "도레미파솔 (터디 연동 없음)" },
   ];
   // modes are shown as letters A~O (0 = A … 14 = O); the server, boards and TouchDesigner keep the numbers 0~14
   const L = (n) => String.fromCharCode(65 + n);
@@ -354,14 +355,24 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
       if (!wasDirty && (changed || !cue.children.length)) renderCue(order, labels); // never overwrite unsaved changes
       refreshSaveUi(`서버에 저장됨 · ${hhmmss()} 확인`);
       // T (미아찾기) is new: put it at the end of the cue once (the 삭제한 모드 list that re-adds modes is hidden)
-      let added = "1";
-      try { added = localStorage.getItem("tx-added-19"); } catch (_) {}
-      if (!added && !order.includes(19) && !dirty()) {
-        try { localStorage.setItem("tx-added-19", "1"); } catch (_) {}
+      // U (도레미파솔, 터디 연동 없음) is new too: once, right under the first S (or at the end if there is no S)
+      const once = (key) => { let v = "1"; try { v = localStorage.getItem(key); } catch (_) {} return !v; };
+      const mark = (key) => { try { localStorage.setItem(key, "1"); } catch (_) {} };
+      let grew = false;
+      if (!dirty() && once("tx-added-19") && !order.includes(19)) {
+        mark("tx-added-19");
         cue.appendChild(cueRow(byN(19)));
-        renumber(); render();
-        saveCue();
+        grew = true;
       }
+      if (!dirty() || grew) {
+        if (once("tx-added-20") && !order.includes(20)) {
+          mark("tx-added-20");
+          const s = [...cue.children].find((li) => +li.dataset.n === 18);
+          if (s) s.after(cueRow(byN(20))); else cue.appendChild(cueRow(byN(20)));
+          grew = true;
+        }
+      }
+      if (grew) { renumber(); render(); saveCue(); }
     } catch (_) {
       setSaveState("err", "서버 연결 안 됨 · 저장 상태를 확인할 수 없어요");
     }
