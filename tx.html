@@ -177,15 +177,11 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
           <h2 class="list-title" id="modes-title">모드 · RUN을 켜고 누르면 바로 실행</h2>
           <div class="view-ctrls">
           <button type="button" class="run" id="run-toggle" aria-pressed="false" title="켜져 있는 동안 모드를 누르면 바로 전환">RUN</button>
-          <div class="tabs" role="tablist" aria-label="모드 보기">
-            <button type="button" role="tab" id="tab-cue" aria-controls="view-cue" aria-selected="true">순서</button>
-            <button type="button" role="tab" id="tab-abc" aria-controls="view-abc" aria-selected="false">A~S</button>
-          </div>
           </div>
         </div>
 
         <!-- 순서: the saved cue order ("다음 모드" follows it); ≡ drags a row, then 순서 저장 -->
-        <div class="view" id="view-cue" role="tabpanel" aria-labelledby="tab-cue">
+        <div class="view" id="view-cue">
           <div class="panel-head">
             <p class="save-state" id="cue-state" data-s="wait" role="status"><span class="sdot"></span><span id="cue-state-text">서버 확인 중…</span></p>
             <div class="order-btns">
@@ -200,8 +196,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
           </div>
         </div>
 
-        <!-- A~O: every mode in letter order -->
-        <div class="view" id="view-abc" role="tabpanel" aria-labelledby="tab-abc" hidden>
+        <!-- every mode in letter order: no longer shown (the A~S tab was removed); kept so the code that fills it still runs -->
+        <div class="view" id="view-abc" hidden>
           <ul class="modes" id="modes" aria-label="모드 A~S"></ul>
         </div>
       </section>
@@ -453,18 +449,8 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
   cue.addEventListener("pointerup", endDrag);
   cue.addEventListener("pointercancel", endDrag);
 
-  // two views of the same modes: 순서 (cue order) / A~O; the choice is remembered on this screen
-  function showTab(which) {
-    const cueOn = which !== "abc";
-    $("tab-cue").setAttribute("aria-selected", String(cueOn));
-    $("tab-abc").setAttribute("aria-selected", String(!cueOn));
-    $("view-cue").hidden = !cueOn;
-    $("view-abc").hidden = cueOn;
-    try { localStorage.setItem("tx-mode-view", cueOn ? "cue" : "abc"); } catch (_) {}
-  }
-  $("tab-cue").addEventListener("click", () => showTab("cue"));
-  $("tab-abc").addEventListener("click", () => showTab("abc"));
-  try { showTab(localStorage.getItem("tx-mode-view") || "cue"); } catch (_) { showTab("cue"); }
+  // only the cue order is shown now (the 순서 / A~S tabs were removed)
+  try { localStorage.removeItem("tx-mode-view"); } catch (_) {}
 
   // where the show is in the saved cue order. A mode can appear more than once, so the row is tracked here
   // (and remembered on this screen); if the mode was changed elsewhere, the next row holding it is used.
