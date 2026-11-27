@@ -1055,11 +1055,6 @@ async function startServer() {
       if (url.pathname.startsWith("/api/")) return await api(req, res, url);
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "Method not allowed");
 
-      // the operator console moved from /tx to /kimochi: old links and bookmarks still land there
-      if (url.pathname === "/tx" || url.pathname === "/tx.html") {
-        res.writeHead(302, { Location: "/kimochi" + url.search });
-        return res.end();
-      }
       if (vite) {
         if (url.pathname === "/admin") req.url = "/admin.html" + url.search;
         if (url.pathname === "/rx") req.url = "/rx.html" + url.search;
