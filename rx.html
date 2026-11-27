@@ -941,6 +941,11 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
       alignShape();
     }
     centerLines(line);
+    // centre the stack by its ink, not its letter boxes: ○ sits low in its box, so box-centring pushed the note
+    // below the panel. Shift by half the difference between the empty space above and below the ink.
+    const kids = [...line.children], first = inkBox(kids[0]), lastBox = inkBox(kids[kids.length - 1]);
+    const shift = (first.top - (lastBox.fs - lastBox.bottom)) / 2;
+    line.style.transform = `translateY(${(-shift).toFixed(2)}px)`;
   }
 
   // centre each line by its ink, like fitText, so left and right margins match
