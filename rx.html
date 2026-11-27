@@ -1306,11 +1306,15 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // is usually the button). Now each element plays only the silent WAV, then gets its real file back, paused.
   const unlock = () => {
     removeEventListener("pointerdown", unlock);
-    Promise.all(Object.values(players).map((a) => {
+    Promise.all(Object.values(players).filter((a) => a.paused).map((a) => { // one already playing is clearly allowed
       const real = a.src;
       a.src = SILENT_WAV;
       return a.play().catch(() => {}).finally(() => { a.pause(); a.src = real; });
-    })).then(() => { trackKey = null; syncAnnouncement(); }); // re-arm whatever should be playing now
+    })).then(() => { // re-arm whatever should be playing now (unless it already plays)
+      const t = state && TRACKS[state.mode], a = t && players[srcOf(t)];
+      if (a && !a.paused) return;
+      trackKey = null; syncAnnouncement();
+    });
   };
   addEventListener("pointerdown", unlock);
 
@@ -1412,7 +1416,15 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     return Math.max(0, Math.min(1, (e - now) / (FADE12_FADE_S * 1000)));
   };
 
-  let actx = null;
+  let actx = null, audioStale = false;
+  // after the background (see comeBack): the first tap replaces the Web Audio with a fresh one, inside that tap
+  addEventListener("pointerdown", () => {
+    if (!audioStale) return;
+    audioStale = false;
+    if (actx) { try { actx.close(); } catch (_) {} actx = null; }
+    shots.note = shots.main = null;
+    wakeAudio();
+  }, true);
   const wakeAudio = () => {
     try {
       // iPhones: let Web Audio play even with the ringer switch on silent, like the <audio> sounds do
@@ -1782,17 +1794,19 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     if (sounding(nowNote)) nowNote.pause();
     if (nowMain) { nowMain.pause(); nowMain = null; }
   }
-  // Coming back (screen on again, back from another app or site): an iPhone's audio after the background can report
-  // "running" yet play nothing, so presses stayed silent until the audience reloaded. Reload for them instead: the
-  // number is kept (it is on the server under this phone's id) and the fresh page's audio works on the next tap.
-  let hiddenAt = 0;
-  const comeBack = () => { if (hiddenAt && Date.now() - hiddenAt > 800 && !window.rxAdmin) location.reload(); }; // not the /split preview
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { hiddenAt = Date.now(); silenceAll(); }
-    else { comeBack(); pull(); pullClaims(); }
-  });
-  addEventListener("pagehide", () => { hiddenAt = hiddenAt || Date.now(); silenceAll(); });
-  addEventListener("pageshow", (e) => { if (e.persisted && !window.rxAdmin) location.reload(); }); // back from another site (page kept in memory)
+  // Coming back (screen on again, back from another app or site): an iPhone's Web Audio after the background can
+  // report "running" yet play nothing, so presses stayed silent until a reload. A reload, though, also loses the
+  // tap that lets the speech elements play, so the 안내 멘트 then stayed silent. Instead: the next tap throws the
+  // old Web Audio away and builds a fresh one inside that tap (decoded sounds are kept), and unlocks the speech
+  // elements again. Elements the phone still allows keep playing straight away.
+  const comeBack = () => {
+    audioStale = true;
+    addEventListener("pointerdown", unlock);
+    pull(); pullClaims();
+  };
+  document.addEventListener("visibilitychange", () => { if (document.hidden) silenceAll(); else comeBack(); });
+  addEventListener("pagehide", silenceAll);
+  addEventListener("pageshow", (e) => { if (e.persisted) comeBack(); }); // back from another site (page kept in memory)
 })();
 </script>
 </body>
