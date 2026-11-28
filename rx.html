@@ -892,7 +892,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // 14-mode numbers, so the server's 8 / 9 / 10 / 11 are read as the old 14 (dingdong) / 8 (number + shape, note) /
   // 11 (melody) / 12 (hold).
   // Web 12 (number + shape + 도레미파솔, hold to sustain) is 17 here; web 13 (built-in LEDs blink 5 times) is 15.
-  const INNER_MODE = { 8: 14, 9: 19, 10: 11, 11: 12, 12: 20, 13: 15, 14: 8, 15: 18, 16: 19, 17: 20, 18: 21, 19: 6, 20: 21 }; // web 14 = web 9 again (number + shape + note)
+  const INNER_MODE = { 8: 14, 9: 19, 10: 11, 11: 12, 12: 20, 13: 15, 14: 8, 15: 18, 16: 19, 17: 20, 18: 21, 19: 6, 20: 21, 21: 22 }; // web 14 = web 9 again (number + shape + note)
   // web 15 (음계만) is 18 here: the note name alone on the panel, the same short note as web 9 on press
   // web 16 (도형+음계) is 19: shape / note name, short note on press. Web 9 (J) uses it too now (no number);
   // web 14 (O, → 터디) keeps 8 (number + shape + note)
@@ -1181,7 +1181,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // web J / K / M (9 / 10 / 12, cue 7~9): only the shape /tx allows reaches TouchDesigner, the same phones that
   // sound, so a phone of another shape can't change the visual. The release goes out only if the press did.
   const TD_SHAPE_GATED = [9, 10];
-  const TD_OFF = [12, 20]; // web M (shape picking for sound only) and U: no visual, nothing goes to TouchDesigner
+  const TD_OFF = [12, 20, 21]; // web M (shape picking for sound only) and U: no visual, nothing goes to TouchDesigner
   let pressSent = false;
   const diag = (info) => {
     if (window.rxAdmin) return;
@@ -1231,12 +1231,14 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
     // modes 4 and 5: each number hears its own voice, a new one on entering 5; no number (or 99) -> voice 7 / voice 1
     4: { src: () => VOICE[VOICE4_OF[number] || 7], delay: 2000 },
     5: { src: () => VOICE[VOICE5_OF[number] || 1], delay: 2000 },
+    // web 21 (shown as X): a 2 s clip, once on every phone the moment /tx switches (panel and LEDs dark)
+    22: { src: "/assets/rx/modeX-clip.mp3", delay: 0 },
   };
   const srcOf = (t) => (typeof t.src === "function" ? t.src() : t.src);
   const players = {};
-  for (const src of [TRACKS[2].src, ...Object.values(VOICE)]) {
+  for (const src of [TRACKS[2].src, TRACKS[22].src, ...Object.values(VOICE)]) {
     players[src] = new Audio(src);
-    players[src].preload = src === TRACKS[2].src ? "auto" : "none"; // voices: only this phone's two load (below)
+    players[src].preload = src === TRACKS[2].src || src === TRACKS[22].src ? "auto" : "none"; // voices: only this phone's two load (below)
   }
   for (const src of Object.values(VOICE)) players[src].loop = true; // 파편적인 발화: repeat until the mode changes
   // once this phone has its number, start loading its own mode 4 and mode 5 voices (not all seven)
@@ -1298,7 +1300,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // drops ("3초 그대로다 뚝"). So the level follows x^3 of the time left (x = 1 -> 0): -10 dB a third of the way in,
   // -18 dB halfway, then gently to silence.
   const fadeLevel = (x) => Math.pow(Math.max(0, Math.min(1, x)), 3);
-  const FRAME_BYTES = { [TRACKS[2].src]: 384 }; // 128 kbps announcement
+  const FRAME_BYTES = { [TRACKS[2].src]: 384, [TRACKS[22].src]: 384 }; // 128 kbps announcement and X clip
   for (const src of Object.values(VOICE)) FRAME_BYTES[src] = 288; // 96 kbps voices
   let fades = [];
   function stopFades() {

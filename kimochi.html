@@ -238,9 +238,11 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
     { n: 18, d: "도레미파솔 (도~솔 이름만)" },
     { n: 19, d: "미아찾기 (신호 끊긴 디바이스가 띠 띠 띠)" },
     { n: 20, d: "도레미파솔 (터디 연동 없음)" },
+    { n: 21, d: "음성 2초 (전환 순간 모든 폰에서 한 번)" },
   ];
   // modes are shown as letters A~O (0 = A … 14 = O); the server, boards and TouchDesigner keep the numbers 0~14
-  const L = (n) => String.fromCharCode(65 + n);
+  // mode 21 is stored as V but shown as X (asked for by that name); every other mode is its own letter
+  const L = (n) => (n === 21 ? "X" : String.fromCharCode(65 + n));
   const $ = (id) => document.getElementById(id);
   let state = null, offset = 0, pending = null, busy = false;
 
@@ -371,6 +373,12 @@ button,input{font:inherit;color:inherit;letter-spacing:inherit}
           if (s) s.after(cueRow(byN(20))); else cue.appendChild(cueRow(byN(20)));
           grew = true;
         }
+      }
+      // X (21) is new: once, at the very end
+      if ((!dirty() || grew) && once("tx-added-21") && !order.includes(21)) {
+        mark("tx-added-21");
+        cue.appendChild(cueRow(byN(21)));
+        grew = true;
       }
       if (grew) { renumber(); render(); saveCue(); }
     } catch (_) {
