@@ -446,10 +446,10 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   // The old /rx?admin address is gone: it now opens as an ordinary audience phone.
   const ADMIN = new URLSearchParams(location.search).has("split");
   window.rxAdmin = ADMIN;
-  // Web phones carry 78~157 (the 77 LaNA boards carry 1~77): the server hands out seats 1~80 first come, first
-  // served (sounds/shapes/notes are looked up by seat), and every phone shows and sends seat + 77 = 78 … 157
+  // Web phones carry 81~160 (the LaNA boards carry 1~80): the server hands out seats 1~80 first come, first
+  // served (sounds/shapes/notes are looked up by seat), and every phone shows and sends seat + 80 = 81 … 160
   // (OLED, picker and the presses TouchDesigner gets).
-  const SHOWN = window.rxShown = (seat) => seat + 77;
+  const SHOWN = window.rxShown = (seat) => seat + 80;
   const root = document.getElementById("picker");
   const trigger = document.getElementById("picker-trigger");
   const label = document.getElementById("picker-value");
@@ -911,7 +911,7 @@ body{background:var(--paper);display:grid;place-items:center;overflow:hidden}
   function paint() {
     const mode = state ? state.mode : 1; // no server (e.g. the shared preview link): behave like mode 1
     // single-line modes fill the panel edge to edge (see fitText); no number yet: the panel stays dark
-    const num = number ? String(window.rxShown(number)).padStart(2, "0") : ""; // seat 1 -> 78 … seat 80 -> 157
+    const num = number ? String(window.rxShown(number)).padStart(2, "0") : ""; // seat 1 -> 81 … seat 80 -> 160
     let html = number ? `<span class="oled-fit" data-ref="00">${num}</span>` : ""; // one size for every number (01 as big as 02)
     if (mode === 0 || (raw && raw.mode === 19)) html = LOGO; // before the show, and T (미아찾기): the logo, the same on every phone (no number needed)
     else if (mode === 17) html = number ? `<span class="oled-line"><span class="oled-shape${SHAPE_OF[number] === "△" ? " tri" : ""}">${SHAPE_OF[number]}</span><span class="oled-note">${DOREMI_OF[number]}</span></span>` : ""; // web 12 (M): shape / C~G (도~솔), no number
